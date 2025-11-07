@@ -1,6 +1,8 @@
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:flutter_acrylic/flutter_acrylic.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/system_theme_color_service.dart';
 
@@ -52,6 +54,8 @@ class ThemeManager extends ChangeNotifier {
   bool _followSystemColor = true; // 默认跟随系统主题色
   Color? _systemColor; // 系统主题色缓存
   ThemeFramework _themeFramework = ThemeFramework.material; // 默认使用 Material 3
+  WindowEffect _windowEffect = WindowEffect.disabled; // 窗口材质效果
+  bool _isApplyingWindowEffect = false; // 防止并发应用导致插件内部状态错误
 
   ThemeMode get themeMode => _themeMode;
   Color get seedColor => _seedColor;
@@ -60,6 +64,7 @@ class ThemeManager extends ChangeNotifier {
   ThemeFramework get themeFramework => _themeFramework;
   bool get isMaterialFramework => _themeFramework == ThemeFramework.material;
   bool get isFluentFramework => _themeFramework == ThemeFramework.fluent;
+  WindowEffect get windowEffect => _windowEffect;
 
   bool get isDarkMode => _themeMode == ThemeMode.dark;
 
@@ -72,10 +77,15 @@ class ThemeManager extends ChangeNotifier {
   }
 
   fluent.FluentThemeData buildFluentThemeData(Brightness brightness) {
+    final useTransparent = Platform.isWindows && _windowEffect != WindowEffect.disabled;
     return fluent.FluentThemeData(
       brightness: brightness,
       accentColor: _buildAccentColor(_seedColor),
       fontFamily: 'Microsoft YaHei',
+      scaffoldBackgroundColor: useTransparent ? fluent.Colors.transparent : null,
+      navigationPaneTheme: fluent.NavigationPaneThemeData(
+        backgroundColor: useTransparent ? fluent.Colors.transparent : null,
+      ),
     );
   }
 
@@ -334,12 +344,29 @@ class ThemeManager extends ChangeNotifier {
       } else {
         _themeFramework = ThemeFramework.material;
       }
+
+      // 加载窗口材质（默认：Windows 11 设为 Mica，否则 Disabled）
+      final windowEffectIndex = prefs.getInt('window_effect');
+      if (windowEffectIndex != null && windowEffectIndex >= 0 && windowEffectIndex < WindowEffect.values.length) {
+        _windowEffect = WindowEffect.values[windowEffectIndex];
+      } else {
+        if (Platform.isWindows) {
+          // 假定 Windows 11 优先使用 Mica；若不支持，运行时应用时会回退
+          _windowEffect = WindowEffect.mica;
+        } else {
+          _windowEffect = WindowEffect.disabled;
+        }
+      }
       
       print('🎨 [ThemeManager] 从本地加载主题: ${_themeMode.name}');
       print('🎨 [ThemeManager] 跟随系统主题色: $_followSystemColor');
       print('🎨 [ThemeManager] 主题色: 0x${_seedColor.value.toRadixString(16)}');
       print('🎨 [ThemeManager] 桌面主题框架: ${_themeFramework.name}');
-      notifyListeners();
+      // 应用一次窗口材质并在帧后通知，避免在布局阶段触发重建
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _applyWindowEffectInternal();
+        notifyListeners();
+      });
     } catch (e) {
       print('❌ [ThemeManager] 加载主题设置失败: $e');
     }
@@ -394,7 +421,11 @@ class ThemeManager extends ChangeNotifier {
     if (_themeMode != mode) {
       _themeMode = mode;
       _saveThemeMode();
-      notifyListeners();
+      // 深浅色改变时更新窗口材质（Mica/Acrylic 受暗色影响），放到帧结束后执行
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _applyWindowEffectInternal();
+        notifyListeners();
+      });
     }
   }
 
@@ -445,7 +476,73 @@ class ThemeManager extends ChangeNotifier {
     if (_themeFramework != framework) {
       _themeFramework = framework;
       _saveThemeFramework();
-      notifyListeners();
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _applyWindowEffectInternal();
+        notifyListeners();
+      });
+    }
+  }
+
+  /// 保存窗口材质到本地
+  Future<void> _saveWindowEffect() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('window_effect', _windowEffect.index);
+      print('💾 [ThemeManager] 窗口材质已保存: ${_windowEffect.name}');
+    } catch (e) {
+      print('❌ [ThemeManager] 保存窗口材质失败: $e');
+    }
+  }
+
+  /// 设置窗口材质
+  Future<void> setWindowEffect(WindowEffect effect) async {
+    if (_windowEffect != effect) {
+      _windowEffect = effect;
+      await _saveWindowEffect();
+      // 在当前帧结束后应用，避免在复杂布局（如 SliverGrid）布局阶段触发重建
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _applyWindowEffectInternal();
+        notifyListeners();
+      });
+    }
+  }
+
+  /// 应用窗口材质（仅 Windows）
+  Future<void> _applyWindowEffectInternal() async {
+    if (!Platform.isWindows) return;
+    if (_isApplyingWindowEffect) return;
+    _isApplyingWindowEffect = true;
+    try {
+      switch (_windowEffect) {
+        case WindowEffect.disabled:
+          await Window.setEffect(effect: WindowEffect.disabled);
+          break;
+        case WindowEffect.mica:
+          await Window.setEffect(effect: WindowEffect.mica, dark: isDarkMode);
+          break;
+        case WindowEffect.acrylic:
+          await Window.setEffect(
+            effect: WindowEffect.acrylic,
+            color: isDarkMode ? const Color(0xCC222222) : const Color(0xCCFFFFFF),
+          );
+          break;
+        case WindowEffect.transparent:
+          await Window.setEffect(effect: WindowEffect.transparent);
+          break;
+        default:
+          await Window.setEffect(effect: WindowEffect.disabled);
+      }
+      // 隐藏系统窗口默认控制区域，避免与自定义标题栏按钮重叠
+      await Window.hideWindowControls();
+      await Window.hideTitle();
+      print('✨ [ThemeManager] 已应用窗口材质: ${_windowEffect.name} (dark=$isDarkMode)');
+    } catch (e) {
+      print('⚠️ [ThemeManager] 应用窗口材质失败，将回退到默认: $e');
+      try {
+        await Window.setEffect(effect: WindowEffect.disabled);
+      } catch (_) {}
+    } finally {
+      _isApplyingWindowEffect = false;
     }
   }
 

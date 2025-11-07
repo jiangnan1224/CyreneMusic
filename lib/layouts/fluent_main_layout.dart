@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:fluent_ui/fluent_ui.dart' as fluent_ui;
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:flutter_acrylic/flutter_acrylic.dart';
 
 import '../pages/home_page.dart';
 import '../pages/discover_page.dart';
@@ -646,27 +647,18 @@ class _FluentMainLayoutState extends State<FluentMainLayout> with WindowListener
       },
     );
 
-    // Windows 平台添加圆角边框
+    // Windows 平台添加圆角边框（仅在未启用窗口材质时包裹）
     if (Platform.isWindows) {
       final isMaximized = _isWindowMaximized;
-      final borderRadius = isMaximized ? BorderRadius.zero : BorderRadius.circular(12);
-      final padding = isMaximized ? EdgeInsets.zero : const EdgeInsets.all(8.0);
-      final borderColor = fluentTheme.resources.controlStrokeColorDefault;
+      final effectEnabled = ThemeManager().windowEffect != WindowEffect.disabled;
+      final borderRadius = (isMaximized || effectEnabled) ? BorderRadius.zero : BorderRadius.circular(12);
 
-      content = Padding(
-        padding: padding,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: fluentTheme.micaBackgroundColor,
-            borderRadius: borderRadius,
-            border: Border.all(color: borderColor, width: 0.8),
-          ),
-          child: ClipRRect(
-            borderRadius: borderRadius,
-            child: content,
-          ),
-        ),
-      );
+      if (!effectEnabled) {
+        content = ClipRRect(
+          borderRadius: borderRadius,
+          child: content,
+        );
+      }
     }
 
     return content;

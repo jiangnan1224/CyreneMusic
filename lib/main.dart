@@ -20,6 +20,7 @@ import 'services/listening_stats_service.dart';
 import 'services/desktop_lyric_service.dart';
 import 'services/android_floating_lyric_service.dart';
 import 'services/auto_update_service.dart';
+import 'package:flutter_acrylic/flutter_acrylic.dart';
 
 
 // 条件导入 flutter_displaymode（仅 Android）
@@ -45,6 +46,12 @@ void main() async {
   // 初始化 window_manager（必须在 runApp 之前）
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();
+    // 初始化窗口材质库（Windows）
+    if (Platform.isWindows) {
+      try {
+        await Window.initialize();
+      } catch (_) {}
+    }
     
     WindowOptions windowOptions = const WindowOptions(
       size: Size(1200, 800),
@@ -276,8 +283,9 @@ class _WindowsRoundedContainerState extends State<_WindowsRoundedContainer> with
     final colorScheme = Theme.of(context).colorScheme;
     
     // 最大化时无边距和圆角，正常时有边距和圆角
-    return Padding(
+    return Container(
       padding: _isMaximized ? EdgeInsets.zero : const EdgeInsets.all(8.0),
+      color: Theme.of(context).colorScheme.background,
       child: Container(
         decoration: BoxDecoration(
           color: colorScheme.surface,

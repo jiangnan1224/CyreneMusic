@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent_ui;
 import '../../utils/theme_manager.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:flutter_acrylic/flutter_acrylic.dart';
 import '../../services/layout_preference_service.dart';
 import '../../services/player_background_service.dart';
 import '../../widgets/custom_color_picker_dialog.dart';
@@ -111,36 +113,103 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
     return FluentSettingsGroup(
       title: '外观',
       children: [
-        FluentSwitchTile(
-          icon: fluent_ui.FluentIcons.clear_night,
-          title: '深色模式',
-          subtitle: '启用深色主题',
-          value: ThemeManager().isDarkMode,
-          onChanged: (value) {
-            ThemeManager().toggleDarkMode(value);
-          },
-        ),
-        FluentSwitchTile(
-          icon: fluent_ui.FluentIcons.color,
-          title: '跟随系统主题色',
-          subtitle: _getFollowSystemColorSubtitle(),
-          value: ThemeManager().followSystemColor,
-          onChanged: (value) async {
-            await ThemeManager().setFollowSystemColor(value, context: context);
-            setState(() {});
-          },
-        ),
+        // 主题模式（亮色/暗色/跟随系统）
         FluentSettingsTile(
-          icon: fluent_ui.FluentIcons.color_solid,
-          title: '主题色',
-          subtitle: _getCurrentThemeColorName(),
-          trailing: ThemeManager().followSystemColor
-              ? const Icon(fluent_ui.FluentIcons.lock, size: 16)
-              : const Icon(fluent_ui.FluentIcons.chevron_right, size: 12),
-          onTap: ThemeManager().followSystemColor 
-              ? null
-              : () => _showThemeColorPicker(),
-          enabled: !ThemeManager().followSystemColor,
+          icon: fluent_ui.FluentIcons.clear_night,
+          title: '主题模式',
+          subtitle: _themeModeLabel(ThemeManager().themeMode),
+          trailing: SizedBox(
+            width: 180,
+            child: fluent_ui.ComboBox<ThemeMode>(
+              placeholder: const Text('选择主题模式'),
+              value: ThemeManager().themeMode,
+              items: const [
+                fluent_ui.ComboBoxItem<ThemeMode>(
+                  value: ThemeMode.light,
+                  child: Text('亮色'),
+                ),
+                fluent_ui.ComboBoxItem<ThemeMode>(
+                  value: ThemeMode.dark,
+                  child: Text('暗色'),
+                ),
+                fluent_ui.ComboBoxItem<ThemeMode>(
+                  value: ThemeMode.system,
+                  child: Text('跟随系统'),
+                ),
+              ],
+              onChanged: (mode) {
+                if (mode != null) {
+                  ThemeManager().setThemeMode(mode);
+                  if (mounted) setState(() {});
+                }
+              },
+            ),
+          ),
+        ),
+        // 主题色设置（折叠项）：合并“跟随系统主题色”和“自定义主题色”
+        fluent_ui.Card(
+          padding: EdgeInsets.zero,
+          child: fluent_ui.Expander(
+            initiallyExpanded: false,
+            header: Row(
+              children: [
+                const Icon(fluent_ui.FluentIcons.color_solid, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('主题色设置')),
+                Text(
+                  ThemeManager().followSystemColor ? '跟随系统' : '自定义',
+                  style: fluent_ui.FluentTheme.of(context).typography.caption,
+                ),
+              ],
+            ),
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(child: Text('跟随系统主题色')),
+                    fluent_ui.ToggleSwitch(
+                      checked: ThemeManager().followSystemColor,
+                      onChanged: (value) async {
+                        await ThemeManager().setFollowSystemColor(value, context: context);
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                  ],
+                ),
+                if (!ThemeManager().followSystemColor) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Expanded(child: Text('自定义主题色')),
+                      fluent_ui.Button(
+                        onPressed: _showFluentThemeColorDialog,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: ThemeManager().seedColor,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: (fluent_ui.FluentTheme.of(context).brightness == Brightness.light)
+                                      ? Colors.black.withOpacity(0.12)
+                                      : Colors.white.withOpacity(0.18),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text('选择颜色'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
         FluentSettingsTile(
           icon: fluent_ui.FluentIcons.picture_library,
@@ -156,12 +225,29 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
           trailing: const Icon(fluent_ui.FluentIcons.chevron_right, size: 12),
           onTap: () => _showThemeFrameworkDialog(),
         ),
+        // 窗口材质（仅 Windows 生效）
         FluentSettingsTile(
-          icon: fluent_ui.FluentIcons.view_dashboard,
-          title: '布局模式',
-          subtitle: LayoutPreferenceService().getLayoutDescription(),
-          trailing: const Icon(fluent_ui.FluentIcons.chevron_right, size: 12),
-          onTap: () => _showLayoutModeDialog(),
+          icon: fluent_ui.FluentIcons.transition_effect,
+          title: '窗口材质',
+          subtitle: _windowEffectLabel(ThemeManager().windowEffect),
+          trailing: SizedBox(
+            width: 200,
+            child: fluent_ui.ComboBox<WindowEffect>(
+              value: ThemeManager().windowEffect,
+              items: const [
+                fluent_ui.ComboBoxItem(value: WindowEffect.disabled, child: Text('默认')),
+                fluent_ui.ComboBoxItem(value: WindowEffect.mica, child: Text('云母')),
+                fluent_ui.ComboBoxItem(value: WindowEffect.acrylic, child: Text('亚克力')),
+                fluent_ui.ComboBoxItem(value: WindowEffect.transparent, child: Text('透明')),
+              ],
+              onChanged: (effect) async {
+                if (effect != null) {
+                  await ThemeManager().setWindowEffect(effect);
+                  if (mounted) setState(() {});
+                }
+              },
+            ),
+          ),
         ),
       ],
     );
@@ -178,6 +264,17 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
         ),
       ),
     );
+  }
+
+  String _themeModeLabel(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light:
+        return '亮色';
+      case ThemeMode.dark:
+        return '暗色';
+      case ThemeMode.system:
+        return '跟随系统';
+    }
   }
 
   String _getCurrentThemeColorName() {
@@ -208,6 +305,69 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
       case ThemeFramework.fluent:
         return 'Fluent UI（Windows 原生风格）';
     }
+  }
+  
+  String _windowEffectLabel(WindowEffect effect) {
+    switch (effect) {
+      case WindowEffect.disabled:
+        return '默认';
+      case WindowEffect.mica:
+        return '云母';
+      case WindowEffect.acrylic:
+        return '亚克力';
+      case WindowEffect.transparent:
+        return '透明';
+      default:
+        return '默认';
+    }
+  }
+
+  void _showFluentThemeColorDialog() {
+    Color temp = ThemeManager().seedColor;
+    fluent_ui.showDialog(
+      context: context,
+      builder: (context) => fluent_ui.ContentDialog(
+        title: const Text('选择主题色'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 420,
+            maxHeight: 480,
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: SingleChildScrollView(
+              child: ColorPicker(
+                pickerColor: temp,
+                onColorChanged: (color) {
+                  temp = color;
+                },
+                enableAlpha: false,
+                displayThumbColor: true,
+                pickerAreaHeightPercent: 0.75,
+                portraitOnly: true,
+                // 去除宽标签行以避免横向溢出
+                labelTypes: const [],
+                hexInputBar: false,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          fluent_ui.Button(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          fluent_ui.FilledButton(
+            onPressed: () {
+              ThemeManager().setSeedColor(temp);
+              if (mounted) setState(() {});
+              Navigator.pop(context);
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showThemeColorPicker() {

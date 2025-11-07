@@ -50,6 +50,7 @@ dependencies:
   # System tray (Windows/macOS/Linux)
   tray_manager: ^0.2.3
   window_manager: ^0.4.2
+  flutter_acrylic: ^1.1.4
   
   # Local storage for settings persistence
   shared_preferences: ^2.3.3

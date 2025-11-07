@@ -241,9 +241,25 @@ class _ThirdPartyAccountsState extends State<ThirdPartyAccounts> {
     );
   }
 
+  Future<bool> _waitUntilNeteaseBound({int maxAttempts = 6, Duration interval = const Duration(milliseconds: 500)}) async {
+    for (var i = 0; i < maxAttempts; i++) {
+      try {
+        final resp = await NeteaseLoginService().fetchBindings();
+        final data = resp['data'] as Map<String, dynamic>?;
+        final netease = data != null ? data['netease'] as Map<String, dynamic>? : null;
+        final bound = (netease != null) && (netease['bound'] == true);
+        if (bound) return true;
+      } catch (_) {}
+      await Future.delayed(interval);
+    }
+    return false;
+  }
+
   Future<void> _bindNetease(BuildContext context, int userId) async {
     final success = await showNeteaseQrDialog(context, userId);
     if (success == true) {
+      // 一些后端在返回 803 后需要数百毫秒写入绑定结果，这里短暂轮询确保 UI 能立即得到最新状态
+      await _waitUntilNeteaseBound();
       _refresh();
       if (context.mounted) {
         final messenger = ScaffoldMessenger.maybeOf(context);

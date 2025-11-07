@@ -11,9 +11,12 @@ Future<bool?> showNeteaseQrDialog(BuildContext context, int userId) async {
     created = await NeteaseLoginService().createQrKey();
   } catch (e) {
     if (!context.mounted) return null;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('获取二维码失败: $e')),
-    );
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('获取二维码失败: $e')),
+      );
+    }
     return null;
   }
 
@@ -41,9 +44,12 @@ Future<bool?> showNeteaseQrDialog(BuildContext context, int userId) async {
         );
 
   if (success == true && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('网易云账号绑定成功')),
-    );
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger != null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('网易云账号绑定成功')),
+      );
+    }
   }
 
   return success;
