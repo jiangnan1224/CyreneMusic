@@ -38,12 +38,6 @@ on:
         type: boolean
         default: true
 
-env:
-  IS_PR_RELEASE: >-
-    ${{ github.event_name == 'pull_request'
-        && github.event.pull_request.merged == true
-        && startsWith(github.event.pull_request.title, 'v') }}
-
 jobs:
   # Android 构建
   build-android:
@@ -51,7 +45,9 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'push'
         || (github.event_name == 'workflow_dispatch' && inputs.build_android)
-        || env.IS_PR_RELEASE == 'true' }}
+        || (github.event_name == 'pull_request'
+            && github.event.pull_request.merged == true
+            && startsWith(github.event.pull_request.title, 'v')) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -89,7 +85,9 @@ jobs:
     runs-on: windows-latest
     if: ${{ github.event_name == 'push'
         || (github.event_name == 'workflow_dispatch' && inputs.build_windows)
-        || env.IS_PR_RELEASE == 'true' }}
+        || (github.event_name == 'pull_request'
+            && github.event.pull_request.merged == true
+            && startsWith(github.event.pull_request.title, 'v')) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -126,7 +124,9 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'push'
         || (github.event_name == 'workflow_dispatch' && inputs.build_linux)
-        || env.IS_PR_RELEASE == 'true' }}
+        || (github.event_name == 'pull_request'
+            && github.event.pull_request.merged == true
+            && startsWith(github.event.pull_request.title, 'v')) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -172,7 +172,9 @@ jobs:
     runs-on: macos-latest
     if: ${{ github.event_name == 'push'
         || (github.event_name == 'workflow_dispatch' && inputs.build_macos)
-        || env.IS_PR_RELEASE == 'true' }}
+        || (github.event_name == 'pull_request'
+            && github.event.pull_request.merged == true
+            && startsWith(github.event.pull_request.title, 'v')) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -210,7 +212,9 @@ jobs:
     runs-on: macos-latest
     if: ${{ github.event_name == 'push'
         || (github.event_name == 'workflow_dispatch' && inputs.build_ios)
-        || env.IS_PR_RELEASE == 'true' }}
+        || (github.event_name == 'pull_request'
+            && github.event.pull_request.merged == true
+            && startsWith(github.event.pull_request.title, 'v')) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -247,7 +251,9 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ always() && (
           (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
-          || env.IS_PR_RELEASE == 'true'
+          || (github.event_name == 'pull_request'
+              && github.event.pull_request.merged == true
+              && startsWith(github.event.pull_request.title, 'v'))
         ) }}
     steps:
       - name: Download all artifacts
@@ -261,11 +267,11 @@ jobs:
       - name: Determine release metadata
         id: release_meta
         uses: actions/github-script@v7
-        env:
-          IS_PR_RELEASE: ${{ env.IS_PR_RELEASE }}
         with:
           script: |
-            const isPrRelease = process.env.IS_PR_RELEASE === 'true';
+            const isPrRelease = context.eventName === 'pull_request'
+              && context.payload.pull_request.merged === true
+              && context.payload.pull_request.title.startsWith('v');
             if (isPrRelease) {
               const title = context.payload.pull_request.title.trim();
               const tag = title.startsWith('v') ? title : `v${title}`;
