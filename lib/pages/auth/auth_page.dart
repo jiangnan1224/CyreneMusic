@@ -5,6 +5,7 @@ import 'dart:io';
 import '../../services/auth_overlay_service.dart';
 import '../../services/auth_service.dart';
 import '../../utils/theme_manager.dart';
+import 'qr_login_dialog.dart';
 
 /// 显示认证页面（改为内嵌 Stack 页面，而非对话框）
 Future<bool?> showAuthDialog(BuildContext context, {int initialTab = 0}) {
@@ -498,6 +499,28 @@ class _LoginViewState extends State<_LoginView> {
             onPressed: _handleLogin,
             colorScheme: colorScheme,
           ),
+
+          if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) ...[
+            const SizedBox(height: 12),
+
+            OutlinedButton.icon(
+              onPressed: _isLoading
+                  ? null
+                  : () async {
+                      final ok = await showQrLoginDialog(context);
+                      if (!mounted) return;
+                      if (ok == true) {
+                        if (AuthOverlayService().isVisible) {
+                          AuthOverlayService().hide(true);
+                        } else {
+                          Navigator.pop(context, true);
+                        }
+                      }
+                    },
+              icon: const Icon(Icons.qr_code_rounded),
+              label: const Text('手机扫码登录'),
+            ),
+          ],
           
           const SizedBox(height: 16),
           

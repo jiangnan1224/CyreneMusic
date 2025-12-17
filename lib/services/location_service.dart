@@ -24,14 +24,15 @@ class LocationInfo {
 
   factory LocationInfo.fromJson(Map<String, dynamic> json) {
     final location = json['location'] as Map<String, dynamic>? ?? {};
+    String s(dynamic v) => v == null ? '' : v.toString();
     return LocationInfo(
-      ip: json['ip'] ?? '',
-      country: location['country'] ?? '',
-      province: location['province'] ?? '',
-      city: location['city'] ?? '',
-      isp: location['isp'] ?? '',
-      latitude: location['latitude'] ?? '',
-      longitude: location['longitude'] ?? '',
+      ip: s(json['ip']),
+      country: s(location['country']),
+      province: s(location['province']),
+      city: s(location['city']),
+      isp: s(location['isp']),
+      latitude: s(location['latitude']),
+      longitude: s(location['longitude']),
     );
   }
 

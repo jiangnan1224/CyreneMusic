@@ -110,6 +110,7 @@ dependencies:
   media_kit: ^1.1.11
   media_kit_video: ^1.2.5
   media_kit_libs_video: ^1.0.7
+  mobile_scanner: ^7.1.4
 
 # 依赖覆盖：解决 screen_brightness_android 的网络问题
 dependency_overrides:

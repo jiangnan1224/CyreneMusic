@@ -129,6 +129,25 @@ class AuthService extends ChangeNotifier {
     } catch (_) {}
   }
 
+  Future<void> loginWithToken({required String token, Map<String, dynamic>? userJson}) async {
+    _authToken = token;
+    await _saveTokenToStorage(token);
+
+    if (userJson != null && userJson.isNotEmpty) {
+      _currentUser = User.fromJson(userJson);
+      _isLoggedIn = true;
+      await _saveUserToStorage(_currentUser!);
+      notifyListeners();
+      return;
+    }
+
+    // 兜底：通过后端校验 token 并获取用户信息
+    final ok = await validateToken();
+    if (!ok) {
+      await logout();
+    }
+  }
+
   /// 发送注册验证码
   Future<Map<String, dynamic>> sendRegisterCode({
     required String email,

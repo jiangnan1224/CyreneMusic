@@ -8,6 +8,8 @@ import '../../services/location_service.dart';
 import '../../services/donate_service.dart';
 import '../../utils/theme_manager.dart';
 import '../auth/auth_page.dart';
+import '../auth/qr_login_dialog.dart';
+import '../auth/qr_login_scan_page.dart';
 
 /// 用户卡片组件
 class UserCard extends StatefulWidget {
@@ -113,6 +115,7 @@ class _UserCardState extends State<UserCard> {
                         accountController: loginAccountController,
                         passwordController: loginPasswordController,
                         loading: loginLoading,
+                        onCleanup: cleanup,
                         onSubmit: () async {
                           setState(() {
                             loginLoading = true;
@@ -374,6 +377,7 @@ class _UserCardState extends State<UserCard> {
     required TextEditingController accountController,
     required TextEditingController passwordController,
     required bool loading,
+    required VoidCallback onCleanup,
     required Future<void> Function() onSubmit,
     required VoidCallback toRegister,
     required VoidCallback toForgot,
@@ -425,11 +429,32 @@ class _UserCardState extends State<UserCard> {
           ),
           const SizedBox(height: 16),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              fluent_ui.HyperlinkButton(child: const Text('去注册'), onPressed: toRegister),
-              const SizedBox(width: 8),
-              fluent_ui.HyperlinkButton(child: const Text('忘记密码'), onPressed: toForgot),
-              const Spacer(),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    fluent_ui.HyperlinkButton(child: const Text('去注册'), onPressed: toRegister),
+                    const SizedBox(height: 2),
+                    fluent_ui.HyperlinkButton(child: const Text('忘记密码'), onPressed: toForgot),
+                    const SizedBox(height: 2),
+                    fluent_ui.HyperlinkButton(
+                      child: const Text('手机扫码登录'),
+                      onPressed: () async {
+                        final ok = await showQrLoginDialog(context);
+                        if (ok == true) {
+                          onCleanup();
+                          if (context.mounted) {
+                            Navigator.pop(context, true);
+                          }
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
               fluent_ui.FilledButton(
                 onPressed: loading ? null : onSubmit,
                 child: loading
@@ -1240,6 +1265,17 @@ class _UserCardState extends State<UserCard> {
                     ),
                   ],
                 ),
+                if (Platform.isAndroid || Platform.isIOS) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => openQrLoginScanPage(context),
+                      icon: const Icon(Icons.qr_code_scanner_rounded),
+                      label: const Text('扫码登录桌面端'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1453,6 +1489,14 @@ class _UserCardState extends State<UserCard> {
       context: context,
       builder: (context) => CupertinoActionSheet(
         actions: [
+          if (Platform.isAndroid || Platform.isIOS)
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(context);
+                await openQrLoginScanPage(context);
+              },
+              child: const Text('扫码登录桌面端'),
+            ),
           CupertinoActionSheetAction(
             onPressed: () {
               Navigator.pop(context);

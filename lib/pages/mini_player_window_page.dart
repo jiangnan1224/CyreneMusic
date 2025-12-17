@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/track.dart';
+import '../services/color_extraction_service.dart';
 import '../services/desktop_lyric_service.dart';
 import '../services/player_service.dart';
 import '../services/mini_player_window_service.dart';
@@ -20,13 +21,19 @@ class MiniPlayerWindowPage extends StatefulWidget {
   State<MiniPlayerWindowPage> createState() => _MiniPlayerWindowPageState();
 }
 
- class _MiniPlayerWindowPageState extends State<MiniPlayerWindowPage>
+class _MiniPlayerWindowPageState extends State<MiniPlayerWindowPage>
     with SingleTickerProviderStateMixin, WindowListener {
   static const double _queuePanelTargetHeight = 760;
   static const double _queuePanelMinHeight = 560;
 
   bool _isQueuePanelOpen = false;
   bool _isQueuePanelVisible = false;
+
+  Color _extractedThemeColor = Colors.grey;
+  String? _currentThemeColorImageUrl;
+  int _pendingThemeColorExtractionId = 0;
+  String? _lastScheduledThemeColorImageUrl;
+
   Size? _restoreSize;
   Offset? _restorePosition;
   Size? _lastKnownSize;
@@ -45,10 +52,18 @@ class MiniPlayerWindowPage extends StatefulWidget {
   @override
   void initState() {
     super.initState();
+    _extractedThemeColor = Colors.grey[700]!;
     if (Platform.isWindows) {
       windowManager.addListener(this);
       _refreshWindowMetrics();
     }
+
+    PlayerService().addListener(_onPlayerServiceChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scheduleThemeColorExtraction();
+    });
+
     _queuePanelController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -89,9 +104,94 @@ class MiniPlayerWindowPage extends StatefulWidget {
     if (Platform.isWindows) {
       windowManager.removeListener(this);
     }
+    PlayerService().removeListener(_onPlayerServiceChanged);
     _queuePanelController.removeListener(_syncWindowSizeWithQueueAnimation);
     _queuePanelController.dispose();
     super.dispose();
+  }
+
+  void _onPlayerServiceChanged() {
+    if (!mounted) return;
+    _scheduleThemeColorExtraction();
+  }
+
+  void _scheduleThemeColorExtraction() {
+    final player = PlayerService();
+    final song = player.currentSong;
+    final track = player.currentTrack;
+    final imageUrl = song?.pic ?? track?.picUrl ?? '';
+
+    if (imageUrl.isEmpty) {
+      if (_currentThemeColorImageUrl != null || _extractedThemeColor != Colors.grey[700]!) {
+        _currentThemeColorImageUrl = null;
+        _lastScheduledThemeColorImageUrl = null;
+        if (mounted) {
+          setState(() {
+            _extractedThemeColor = Colors.grey[700]!;
+          });
+        } else {
+          _extractedThemeColor = Colors.grey[700]!;
+        }
+      }
+      return;
+    }
+
+    if (imageUrl == _currentThemeColorImageUrl) return;
+    if (imageUrl == _lastScheduledThemeColorImageUrl) return;
+    _lastScheduledThemeColorImageUrl = imageUrl;
+
+    final cached = ColorExtractionService().getCachedColors(imageUrl);
+    final cachedTheme = cached?.themeColor;
+    if (cachedTheme != null) {
+      _currentThemeColorImageUrl = imageUrl;
+      if (mounted) {
+        setState(() {
+          _extractedThemeColor = cachedTheme;
+        });
+      }
+      return;
+    }
+
+    _pendingThemeColorExtractionId++;
+    final currentId = _pendingThemeColorExtractionId;
+
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      if (currentId != _pendingThemeColorExtractionId) return;
+      _extractThemeColorFromImage(imageUrl);
+    });
+  }
+
+  Future<void> _extractThemeColorFromImage(String imageUrl) async {
+    final cached = ColorExtractionService().getCachedColors(imageUrl);
+    final cachedTheme = cached?.themeColor;
+    if (cachedTheme != null) {
+      _currentThemeColorImageUrl = imageUrl;
+      if (mounted) {
+        setState(() {
+          _extractedThemeColor = cachedTheme;
+        });
+      }
+      return;
+    }
+
+    _currentThemeColorImageUrl = imageUrl;
+
+    try {
+      final result = await ColorExtractionService().extractColorsFromUrl(
+        imageUrl,
+        sampleSize: 64,
+        timeout: const Duration(seconds: 3),
+      );
+      final themeColor = result?.themeColor;
+      if (themeColor != null && mounted && _currentThemeColorImageUrl == imageUrl) {
+        setState(() {
+          _extractedThemeColor = themeColor;
+        });
+      }
+    } catch (_) {
+      return;
+    }
   }
 
   Future<void> _refreshWindowMetrics() async {
@@ -358,7 +458,7 @@ class MiniPlayerWindowPage extends StatefulWidget {
         final coverUrl = song?.pic ?? track?.picUrl ?? '';
         
         // 获取主题色
-        final themeColor = player.themeColorNotifier.value ?? Colors.grey[700]!;
+        final themeColor = _extractedThemeColor;
         
         // 计算背景色（更浅的灰色调，类似参考图）
         final backgroundColor = Color.lerp(themeColor, Colors.grey[600]!, 0.7)!;
