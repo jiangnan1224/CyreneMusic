@@ -3,28 +3,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import '../utils/theme_manager.dart';
-import '../pages/auth/auth_page.dart';
-import '../pages/settings_page/user_card.dart';
+import '../services/audio_source_service.dart';
+import '../pages/settings_page/audio_source_settings.dart';
 
-/// 未登录状态下的精美登录提示组件
+/// 音源未配置状态下的精美配置提示组件
 /// 适配 iOS Cupertino、Material Design 3 和 Fluent UI 三种主题
-class LoginPrompt extends StatefulWidget {
-  final VoidCallback onLoginPressed;
+class AudioSourcePrompt extends StatefulWidget {
+  final VoidCallback onConfigurePressed;
   final String? title;
   final String? subtitle;
   
-  const LoginPrompt({
+  const AudioSourcePrompt({
     super.key,
-    required this.onLoginPressed,
+    required this.onConfigurePressed,
     this.title,
     this.subtitle,
   });
   
   @override
-  State<LoginPrompt> createState() => _LoginPromptState();
+  State<AudioSourcePrompt> createState() => _AudioSourcePromptState();
 }
 
-class _LoginPromptState extends State<LoginPrompt> 
+class _AudioSourcePromptState extends State<AudioSourcePrompt> 
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -53,8 +53,8 @@ class _LoginPromptState extends State<LoginPrompt>
     super.dispose();
   }
   
-  String get _title => widget.title ?? '登录后查看更多内容';
-  String get _subtitle => widget.subtitle ?? '登录即可获取每日推荐、私人FM、专属歌单等个性化内容';
+  String get _title => widget.title ?? '配置音源后开始使用';
+  String get _subtitle => widget.subtitle ?? '应用需要配置音源才能播放音乐，支持洛雪音源和 TuneHub 等第三方服务';
   
   @override
   Widget build(BuildContext context) {
@@ -72,7 +72,7 @@ class _LoginPromptState extends State<LoginPrompt>
     return _buildMaterialPrompt(context);
   }
   
-  /// Material Design 3 风格登录提示
+  /// Material Design 3 风格配置提示
   Widget _buildMaterialPrompt(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -103,14 +103,14 @@ class _LoginPromptState extends State<LoginPrompt>
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          cs.primary.withOpacity(0.15),
-                          cs.tertiary.withOpacity(0.1),
+                          cs.tertiary.withOpacity(0.15),
+                          cs.secondary.withOpacity(0.1),
                         ],
                       ),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: cs.primary.withOpacity(0.1),
+                          color: cs.tertiary.withOpacity(0.1),
                           blurRadius: 30,
                           spreadRadius: 5,
                         ),
@@ -126,18 +126,18 @@ class _LoginPromptState extends State<LoginPrompt>
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: cs.primary.withOpacity(0.3),
+                              color: cs.tertiary.withOpacity(0.3),
                               width: 2,
                             ),
                           ),
                         ),
-                        // 音符图标
+                        // 音源图标
                         Icon(
-                          Icons.music_note_rounded,
+                          Icons.speaker_group_rounded,
                           size: 60,
-                          color: cs.primary,
+                          color: cs.tertiary,
                         ),
-                        // 锁图标叠加
+                        // 设置图标叠加
                         Positioned(
                           right: 25,
                           bottom: 25,
@@ -154,7 +154,7 @@ class _LoginPromptState extends State<LoginPrompt>
                               ],
                             ),
                             child: Icon(
-                              Icons.lock_outline_rounded,
+                              Icons.settings_outlined,
                               size: 20,
                               color: cs.onSurfaceVariant,
                             ),
@@ -177,7 +177,7 @@ class _LoginPromptState extends State<LoginPrompt>
                 const SizedBox(height: 16),
                 // 副标题
                 Container(
-                  constraints: const BoxConstraints(maxWidth: 300),
+                  constraints: const BoxConstraints(maxWidth: 320),
                   child: Text(
                     _subtitle,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -190,31 +190,28 @@ class _LoginPromptState extends State<LoginPrompt>
                 const SizedBox(height: 40),
                 // 功能亮点
                 Container(
-                  constraints: const BoxConstraints(maxWidth: 360),
+                  constraints: const BoxConstraints(maxWidth: 400),
                   child: Wrap(
                     spacing: 12,
                     runSpacing: 12,
                     alignment: WrapAlignment.center,
                     children: [
-                      _buildFeatureChip(context, Icons.calendar_today, '每日推荐', cs),
-                      _buildFeatureChip(context, Icons.radio, '私人FM', cs),
-                      _buildFeatureChip(context, Icons.library_music, '专属歌单', cs),
-                      _buildFeatureChip(context, Icons.new_releases_outlined, '新歌推荐', cs),
+                      _buildFeatureChip(context, Icons.cloud_outlined, '洛雪音源', cs),
+                      _buildFeatureChip(context, Icons.hub_outlined, 'TuneHub', cs),
+                      _buildFeatureChip(context, Icons.music_note, '多平台支持', cs),
+                      _buildFeatureChip(context, Icons.high_quality, '音质可选', cs),
                     ],
                   ),
                 ),
                 const SizedBox(height: 48),
-                // 登录按钮 - 移动端调用登录页面，成功后刷新
+                // 配置按钮
                 FilledButton.icon(
-                  onPressed: () async {
-                    final result = await showAuthDialog(context);
-                    if (result == true && mounted) {
-                      widget.onLoginPressed();
-                    }
-                  },
-                  icon: const Icon(Icons.login_rounded),
-                  label: const Text('立即登录'),
+                  onPressed: widget.onConfigurePressed,
+                  icon: const Icon(Icons.tune_rounded),
+                  label: const Text('配置音源'),
                   style: FilledButton.styleFrom(
+                    backgroundColor: cs.tertiary,
+                    foregroundColor: cs.onTertiary,
                     padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                     textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
@@ -238,7 +235,7 @@ class _LoginPromptState extends State<LoginPrompt>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: cs.primary),
+          Icon(icon, size: 18, color: cs.tertiary),
           const SizedBox(width: 8),
           Text(label, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w500)),
         ],
@@ -246,7 +243,7 @@ class _LoginPromptState extends State<LoginPrompt>
     );
   }
   
-  /// iOS Cupertino 风格登录提示
+  /// iOS Cupertino 风格配置提示
   Widget _buildCupertinoPrompt(BuildContext context) {
     final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
     
@@ -276,7 +273,7 @@ class _LoginPromptState extends State<LoginPrompt>
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          CupertinoColors.systemBlue.withOpacity(0.15),
+                          CupertinoColors.systemPurple.withOpacity(0.15),
                           CupertinoColors.systemIndigo.withOpacity(0.1),
                         ],
                       ),
@@ -292,18 +289,18 @@ class _LoginPromptState extends State<LoginPrompt>
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: CupertinoColors.systemBlue.withOpacity(0.3),
+                              color: CupertinoColors.systemPurple.withOpacity(0.3),
                               width: 2,
                             ),
                           ),
                         ),
-                        // 音符图标
+                        // 音源图标
                         Icon(
-                          CupertinoIcons.music_note_2,
+                          CupertinoIcons.speaker_3,
                           size: 60,
-                          color: CupertinoColors.systemBlue,
+                          color: CupertinoColors.systemPurple,
                         ),
-                        // 锁图标叠加
+                        // 设置图标叠加
                         Positioned(
                           right: 25,
                           bottom: 25,
@@ -320,7 +317,7 @@ class _LoginPromptState extends State<LoginPrompt>
                               ],
                             ),
                             child: Icon(
-                              CupertinoIcons.lock,
+                              CupertinoIcons.gear,
                               size: 18,
                               color: CupertinoColors.systemGrey,
                             ),
@@ -345,7 +342,7 @@ class _LoginPromptState extends State<LoginPrompt>
                 const SizedBox(height: 16),
                 // 副标题
                 Container(
-                  constraints: const BoxConstraints(maxWidth: 300),
+                  constraints: const BoxConstraints(maxWidth: 320),
                   child: Text(
                     _subtitle,
                     style: TextStyle(
@@ -359,37 +356,32 @@ class _LoginPromptState extends State<LoginPrompt>
                 const SizedBox(height: 32),
                 // 功能亮点
                 Container(
-                  constraints: const BoxConstraints(maxWidth: 340),
+                  constraints: const BoxConstraints(maxWidth: 360),
                   child: Wrap(
                     spacing: 10,
                     runSpacing: 10,
                     alignment: WrapAlignment.center,
                     children: [
-                      _buildCupertinoFeatureChip(CupertinoIcons.calendar, '每日推荐', isDark),
-                      _buildCupertinoFeatureChip(CupertinoIcons.radiowaves_right, '私人FM', isDark),
-                      _buildCupertinoFeatureChip(CupertinoIcons.music_albums, '专属歌单', isDark),
-                      _buildCupertinoFeatureChip(CupertinoIcons.sparkles, '新歌推荐', isDark),
+                      _buildCupertinoFeatureChip(CupertinoIcons.cloud, '洛雪音源', isDark),
+                      _buildCupertinoFeatureChip(CupertinoIcons.link, 'TuneHub', isDark),
+                      _buildCupertinoFeatureChip(CupertinoIcons.music_note, '多平台', isDark),
+                      _buildCupertinoFeatureChip(CupertinoIcons.waveform, '高音质', isDark),
                     ],
                   ),
                 ),
                 const SizedBox(height: 48),
-                // 登录按钮 - 移动端调用登录页面，成功后刷新
+                // 配置按钮
                 CupertinoButton.filled(
-                  onPressed: () async {
-                    final result = await showAuthDialog(context);
-                    if (result == true && mounted) {
-                      widget.onLoginPressed();
-                    }
-                  },
+                  onPressed: widget.onConfigurePressed,
                   borderRadius: BorderRadius.circular(12),
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(CupertinoIcons.arrow_right_circle_fill, size: 20),
+                        Icon(CupertinoIcons.gear_alt_fill, size: 20),
                         SizedBox(width: 8),
-                        Text('立即登录', style: TextStyle(fontWeight: FontWeight.w600)),
+                        Text('配置音源', style: TextStyle(fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),
@@ -412,7 +404,7 @@ class _LoginPromptState extends State<LoginPrompt>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: CupertinoColors.systemBlue),
+          Icon(icon, size: 16, color: CupertinoColors.systemPurple),
           const SizedBox(width: 6),
           Text(
             label,
@@ -427,7 +419,7 @@ class _LoginPromptState extends State<LoginPrompt>
     );
   }
   
-  /// Fluent UI 风格登录提示
+  /// Fluent UI 风格配置提示
   Widget _buildFluentPrompt(BuildContext context) {
     final theme = fluent.FluentTheme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -479,13 +471,13 @@ class _LoginPromptState extends State<LoginPrompt>
                             ),
                           ),
                         ),
-                        // 音符图标
+                        // 音源图标
                         Icon(
-                          fluent.FluentIcons.music_in_collection_fill,
+                          fluent.FluentIcons.volume3,
                           size: 56,
                           color: theme.accentColor,
                         ),
-                        // 锁图标叠加
+                        // 设置图标叠加
                         Positioned(
                           right: 25,
                           bottom: 25,
@@ -496,7 +488,7 @@ class _LoginPromptState extends State<LoginPrompt>
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
-                              fluent.FluentIcons.lock,
+                              fluent.FluentIcons.settings,
                               size: 16,
                               color: theme.resources.textFillColorSecondary,
                             ),
@@ -520,7 +512,7 @@ class _LoginPromptState extends State<LoginPrompt>
                 const SizedBox(height: 16),
                 // 副标题
                 Container(
-                  constraints: const BoxConstraints(maxWidth: 320),
+                  constraints: const BoxConstraints(maxWidth: 360),
                   child: Text(
                     _subtitle,
                     style: TextStyle(
@@ -534,29 +526,23 @@ class _LoginPromptState extends State<LoginPrompt>
                 const SizedBox(height: 32),
                 // 功能亮点
                 Container(
-                  constraints: const BoxConstraints(maxWidth: 400),
+                  constraints: const BoxConstraints(maxWidth: 440),
                   child: Wrap(
                     spacing: 12,
                     runSpacing: 12,
                     alignment: WrapAlignment.center,
                     children: [
-                      _buildFluentFeatureChip(fluent.FluentIcons.calendar, '每日推荐', theme),
-                      _buildFluentFeatureChip(fluent.FluentIcons.streaming, '私人FM', theme),
-                      _buildFluentFeatureChip(fluent.FluentIcons.music_in_collection, '专属歌单', theme),
-                      _buildFluentFeatureChip(fluent.FluentIcons.music_note, '新歌推荐', theme),
+                      _buildFluentFeatureChip(fluent.FluentIcons.cloud, '洛雪音源', theme),
+                      _buildFluentFeatureChip(fluent.FluentIcons.link, 'TuneHub', theme),
+                      _buildFluentFeatureChip(fluent.FluentIcons.music_in_collection, '多平台支持', theme),
+                      _buildFluentFeatureChip(fluent.FluentIcons.equalizer, '音质可选', theme),
                     ],
                   ),
                 ),
                 const SizedBox(height: 48),
-                // 登录按钮 - 桌面端直接弹出登录对话框
+                // 配置按钮
                 fluent.FilledButton(
-                  onPressed: () async {
-                    final result = await showFluentLoginDialog(context);
-                    if (result == true && mounted) {
-                      // 登录成功后刷新页面
-                      widget.onLoginPressed();
-                    }
-                  },
+                  onPressed: widget.onConfigurePressed,
                   style: fluent.ButtonStyle(
                     padding: WidgetStatePropertyAll(
                       const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
@@ -565,9 +551,9 @@ class _LoginPromptState extends State<LoginPrompt>
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(fluent.FluentIcons.signin, size: 16),
+                      Icon(fluent.FluentIcons.settings, size: 16),
                       SizedBox(width: 8),
-                      Text('立即登录', style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text('配置音源', style: TextStyle(fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),

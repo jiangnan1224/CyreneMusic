@@ -16,6 +16,7 @@ import '../models/track.dart';
 import '../models/lyric_line.dart';
 import '../utils/lyric_parser.dart';
 import 'music_service.dart';
+import 'audio_source_service.dart';
 import 'cache_service.dart';
 import 'proxy_service.dart';
 import 'play_history_service.dart';
@@ -83,6 +84,12 @@ class PlayerService extends ChangeNotifier {
   List<LyricLine> _lyrics = [];
   int _currentLyricIndex = -1;
 
+  // 音源配置状态
+  bool _isAudioSourceNotConfigured = false;
+  
+  // 音源未配置回调（用于 UI 显示弹窗）
+  void Function()? onAudioSourceNotConfigured;
+
   PlayerState get state => _state;
   SongDetail? get currentSong => _currentSong;
   Track? get currentTrack => _currentTrack;
@@ -94,6 +101,9 @@ class PlayerService extends ChangeNotifier {
   bool get isLoading => _state == PlayerState.loading;
   double get volume => _volume; // 获取当前音量
   ImageProvider? get currentCoverImageProvider => _currentCoverImageProvider;
+  
+  /// 是否因音源未配置导致播放失败
+  bool get isAudioSourceNotConfigured => _isAudioSourceNotConfigured;
 
   /// 设置当前歌曲的预取封面图像提供器
   void setCurrentCoverImageProvider(
@@ -296,6 +306,26 @@ class PlayerService extends ChangeNotifier {
       // 🔧 关键修复：首次播放时才初始化 AudioPlayer，避免启动时的杂音
       await _ensureAudioPlayerInitialized();
 
+      // ✅ 提前检查音源配置（仅对在线音乐）
+      // 本地音乐不需要音源，直接跳过此检查
+      if (track.source != MusicSource.local) {
+        if (!AudioSourceService().isConfigured) {
+          print('⚠️ [PlayerService] 音源未配置，无法播放在线音乐');
+          _state = PlayerState.error;
+          _errorMessage = '音源未配置，请在设置中配置音源';
+          _isAudioSourceNotConfigured = true;
+          // ⚠️ 注意：不设置 _currentTrack，避免 UI 显示"正在播放"
+          notifyListeners();
+          
+          // 调用回调通知 UI 显示提示
+          if (onAudioSourceNotConfigured != null) {
+            print('🔔 [PlayerService] 调用音源未配置回调');
+            onAudioSourceNotConfigured!();
+          }
+          return;
+        }
+      }
+
       // 仅在歌单场景下检测 Apple Music 歌曲换源限制
       // 搜索结果页可以直接播放（使用后端 Widevine 解密）
       if (fromPlaylist && track.source == MusicSource.apple) {
@@ -329,6 +359,7 @@ class PlayerService extends ChangeNotifier {
       _currentTrack = track;
       _currentSong = null;
       _errorMessage = null;
+      _isAudioSourceNotConfigured = false;  // 重置标志
       await _updateCoverImage(track.picUrl, notify: false);
       notifyListeners();
 
@@ -705,9 +736,26 @@ class PlayerService extends ChangeNotifier {
       
       // 5. 后台提取主题色（为播放器页面预加载）
       _extractThemeColorInBackground(songDetail.pic);
+    } on AudioSourceNotConfiguredException catch (e) {
+      // 音源未配置，设置特殊错误状态
+      _state = PlayerState.error;
+      _errorMessage = e.message;
+      _isAudioSourceNotConfigured = true;  // 标记为音源未配置
+      print('⚠️ [PlayerService] 音源未配置: ${e.message}');
+      print('🔔 [PlayerService] 回调状态: ${onAudioSourceNotConfigured == null ? "未设置" : "已设置"}');
+      notifyListeners();
+      // 调用回调通知 UI 显示弹窗
+      if (onAudioSourceNotConfigured != null) {
+        print('🔔 [PlayerService] 正在调用音源未配置回调...');
+        onAudioSourceNotConfigured!();
+        print('🔔 [PlayerService] 回调调用完成');
+      } else {
+        print('⚠️ [PlayerService] 回调未设置，无法显示弹窗');
+      }
     } catch (e) {
       _state = PlayerState.error;
       _errorMessage = '播放失败: $e';
+      _isAudioSourceNotConfigured = false;
       print('❌ [PlayerService] 播放异常: $e');
       notifyListeners();
     }

@@ -19,6 +19,9 @@ import '../widgets/skeleton_loader.dart';
 import '../services/auth_overlay_service.dart';
 import '../pages/settings_page/user_card.dart';
 import '../widgets/login_prompt.dart';
+import '../widgets/audio_source_prompt.dart';
+import '../services/audio_source_service.dart';
+import 'settings_page/audio_source_settings.dart';
 import 'auth/auth_page.dart';
 
 /// 首页 - 为你推荐 Tab 内容 (优化版)
@@ -83,6 +86,27 @@ class _HomeForYouTabState extends State<HomeForYouTab> {
     return 'home_for_you_$userId';
   }
 
+  /// 导航到音源设置页面
+  void _navigateToAudioSourceSettings(BuildContext context) {
+    final themeManager = ThemeManager();
+    
+    if (themeManager.isFluentFramework) {
+      // Fluent UI (Windows)：全屏打开音源设置页面
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const AudioSourceSettings(),
+        ),
+      );
+    } else {
+      // Material/Cupertino：全屏打开音源设置页面
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const AudioSourceSettings(),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeManager = ThemeManager();
@@ -92,13 +116,40 @@ class _HomeForYouTabState extends State<HomeForYouTab> {
     // 未登录状态下显示登录提示
     if (!AuthService().isLoggedIn) {
       return LoginPrompt(
-        onLoginPressed: () => showAuthDialog(context).then((_) {
+        onLoginPressed: () {
+          // LoginPrompt 内部已处理登录对话框，这里只需刷新状态
           if (mounted && AuthService().isLoggedIn) {
             setState(() {
               _future = _load();
             });
           }
-        }),
+        },
+      );
+    }
+    
+    // 已登录但音源未配置时，显示音源配置提示
+    if (!AudioSourceService().isConfigured) {
+      return AnimatedBuilder(
+        animation: AudioSourceService(),
+        builder: (context, _) {
+          // 如果音源已配置，刷新数据
+          if (AudioSourceService().isConfigured) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _future = _load();
+                });
+              }
+            });
+          }
+          return AudioSourcePrompt(
+            onConfigurePressed: () {
+              // 桌面端：导航到设置页面的音源配置子页面
+              // 这里通过回调触发上层页面的导航
+              _navigateToAudioSourceSettings(context);
+            },
+          );
+        },
       );
     }
     

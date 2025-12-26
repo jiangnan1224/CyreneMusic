@@ -12,6 +12,9 @@ import 'discover_page/discover_breadcrumbs.dart';
 import '../widgets/cupertino/cupertino_discover_widgets.dart';
 import '../widgets/skeleton_loader.dart';
 import '../widgets/login_prompt.dart';
+import '../widgets/audio_source_prompt.dart';
+import '../services/audio_source_service.dart';
+import 'settings_page/audio_source_settings.dart';
 import 'auth/auth_page.dart';
 
 class DiscoverPage extends StatefulWidget {
@@ -47,6 +50,15 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (mounted) setState(() {});
   }
 
+  /// 导航到音源设置页面
+  void _navigateToAudioSourceSettings(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const AudioSourceSettings(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final service = NeteaseDiscoverService();
@@ -80,11 +92,44 @@ class _DiscoverPageState extends State<DiscoverPage> {
               child: LoginPrompt(
                 title: '登录后发现更多精彩',
                 subtitle: '登录即可浏览热门歌单、发现新音乐',
-                onLoginPressed: () => showAuthDialog(context).then((_) {
+                onLoginPressed: () {
+                  // LoginPrompt 内部已处理登录，这里只需刷新状态
                   if (mounted && AuthService().isLoggedIn) {
                     setState(() {});
                   }
-                }),
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 已登录但音源未配置时，显示音源配置提示
+    if (!AudioSourceService().isConfigured) {
+      return CupertinoPageScaffold(
+        child: CustomScrollView(
+          slivers: [
+            const CupertinoSliverNavigationBar(
+              largeTitle: Text('发现'),
+              border: null,
+              backgroundColor: null,
+            ),
+            SliverFillRemaining(
+              child: AnimatedBuilder(
+                animation: AudioSourceService(),
+                builder: (context, _) {
+                  if (AudioSourceService().isConfigured) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() {});
+                    });
+                  }
+                  return AudioSourcePrompt(
+                    title: '配置音源后发现更多',
+                    subtitle: '配置音源服务后即可浏览热门歌单、发现新音乐',
+                    onConfigurePressed: () => _navigateToAudioSourceSettings(context),
+                  );
+                },
               ),
             ),
           ],
@@ -303,11 +348,53 @@ class _DiscoverPageState extends State<DiscoverPage> {
               child: LoginPrompt(
                 title: '登录后发现更多精彩',
                 subtitle: '登录即可浏览热门歌单、发现新音乐',
-                onLoginPressed: () => showAuthDialog(context).then((_) {
+                onLoginPressed: () {
+                  // LoginPrompt 内部已处理登录，这里只需刷新状态
                   if (mounted && AuthService().isLoggedIn) {
                     setState(() {});
                   }
-                }),
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 已登录但音源未配置时，显示音源配置提示
+    if (!AudioSourceService().isConfigured) {
+      return Scaffold(
+        backgroundColor: colorScheme.surface,
+        body: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              backgroundColor: colorScheme.surface,
+              title: Text(
+                '发现',
+                style: TextStyle(
+                  color: colorScheme.onSurface,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            SliverFillRemaining(
+              child: AnimatedBuilder(
+                animation: AudioSourceService(),
+                builder: (context, _) {
+                  if (AudioSourceService().isConfigured) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() {});
+                    });
+                  }
+                  return AudioSourcePrompt(
+                    title: '配置音源后发现更多',
+                    subtitle: '配置音源服务后即可浏览热门歌单、发现新音乐',
+                    onConfigurePressed: () => _navigateToAudioSourceSettings(context),
+                  );
+                },
               ),
             ),
           ],
@@ -537,6 +624,48 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   if (mounted && AuthService().isLoggedIn) {
                     setState(() {});
                   }
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 已登录但音源未配置时，显示音源配置提示
+    if (!AudioSourceService().isConfigured) {
+      return fluent.ScaffoldPage(
+        padding: EdgeInsets.zero,
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: FluentDiscoverBreadcrumbs(
+                items: [
+                  DiscoverBreadcrumbItem(
+                    label: '发现',
+                    isEmphasized: true,
+                    isCurrent: true,
+                  ),
+                ],
+                padding: EdgeInsets.zero,
+              ),
+            ),
+            Expanded(
+              child: AnimatedBuilder(
+                animation: AudioSourceService(),
+                builder: (context, _) {
+                  if (AudioSourceService().isConfigured) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() {});
+                    });
+                  }
+                  return AudioSourcePrompt(
+                    title: '配置音源后发现更多',
+                    subtitle: '配置音源服务后即可浏览热门歌单、发现新音乐',
+                    onConfigurePressed: () => _navigateToAudioSourceSettings(context),
+                  );
                 },
               ),
             ),
