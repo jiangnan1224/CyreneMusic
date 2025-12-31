@@ -12,6 +12,7 @@ import '../services/notification_service.dart';
 import '../services/playback_state_service.dart';
 import '../services/player_service.dart';
 import '../utils/theme_manager.dart';
+import 'lx_music_runtime_test_page.dart';
 
 /// 开发者页面
 class DeveloperPage extends StatefulWidget {
@@ -1399,6 +1400,31 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
           label: const Text('清除播放状态'),
           style: FilledButton.styleFrom(
             backgroundColor: Colors.orange,
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Divider(),
+        const SizedBox(height: 8),
+        Text(
+          '音源测试',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        FilledButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LxMusicRuntimeTestPage(),
+              ),
+            );
+          },
+          icon: const Icon(Icons.science),
+          label: const Text('洛雪音源运行时测试'),
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.teal,
           ),
         ),
         const SizedBox(height: 16),
@@ -2852,6 +2878,37 @@ class _DeveloperPageState extends State<DeveloperPage> with SingleTickerProvider
               Icon(fluent.FluentIcons.delete),
               SizedBox(width: 8),
               Text('清除播放状态'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Divider(),
+        const SizedBox(height: 8),
+        Text(
+          '音源测试',
+          style: fluent.FluentTheme.of(context).typography.bodyStrong?.copyWith(
+            color: fluent.FluentTheme.of(context).accentColor,
+          ),
+        ),
+        const SizedBox(height: 8),
+        fluent.FilledButton(
+          style: fluent.ButtonStyle(
+            backgroundColor: fluent.WidgetStateProperty.all(fluent.Colors.teal),
+          ),
+          onPressed: () {
+            Navigator.push(
+              context,
+              fluent.FluentPageRoute(
+                builder: (context) => const LxMusicRuntimeTestPage(),
+              ),
+            );
+          },
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(fluent.FluentIcons.test_beaker),
+              SizedBox(width: 8),
+              Text('洛雪音源运行时测试'),
             ],
           ),
         ),

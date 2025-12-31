@@ -10,6 +10,7 @@ import 'audio_source_service.dart';
 import 'developer_mode_service.dart';
 import 'audio_quality_service.dart';
 import 'auth_service.dart';
+import 'lx_music_runtime_service.dart';
 
 /// 音乐服务 - 处理与音乐相关的API请求
 class MusicService extends ChangeNotifier {
@@ -678,79 +679,67 @@ class MusicService extends ChangeNotifier {
     // - 酷狗：hash (String)
     // - 酷我：rid/mid (int)
     final String lxSongId = _extractLxSongId(songId, source);
+    final sourceCode = audioSourceService.getLxSourceCode(source);
+    final lxQuality = audioSourceService.getLxQuality(quality);
     
     try {
-      // 构建洛雪音源请求 URL
-      final url = audioSourceService.buildLxMusicUrl(source, lxSongId, quality);
-      final headers = audioSourceService.getLxRequestHeaders();
+      final runtime = LxMusicRuntimeService();
+      
+      // 确保运行时已初始化
+      if (!runtime.isInitialized) {
+        print('⚠️ [MusicService] 洛雪运行时未初始化，尝试初始化...');
+        await audioSourceService.initializeLxRuntime();
+      }
+      
+      // 再次检查
+      if (!runtime.isInitialized) {
+        throw Exception('无法初始化洛雪运行时服务');
+      }
+      
+      // 等待脚本就绪 (如果正在加载中)
+      if (!runtime.isScriptReady) {
+        print('⏳ [MusicService] 等待洛雪脚本就绪...');
+        // 简单等待一下，实际应该由 initializeLxRuntime 保证
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!runtime.isScriptReady) {
+           throw Exception('洛雪音源脚本未就绪，请检查脚本是否有效');
+        }
+      }
 
-      print('🌐 [MusicService] 洛雪音源请求: GET $url');
-      DeveloperModeService().addLog('🌐 [Network] GET $url');
+      print('🌐 [MusicService] 调用洛雪运行时获取 URL: $sourceCode / $lxSongId / $lxQuality');
+      DeveloperModeService().addLog('🌐 [Runtime] Get Music URL');
 
-      final response = await http.get(
-        Uri.parse(url),
-        headers: headers,
-      ).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          DeveloperModeService().addLog('⏱️ [Network] 请求超时 (15s)');
-          throw Exception('请求超时');
-        },
+      final audioUrl = await runtime.getMusicUrl(
+        source: sourceCode!,
+        songId: lxSongId,
+        quality: lxQuality,
       );
 
-      print('🎵 [MusicService] 洛雪音源响应状态码: ${response.statusCode}');
-      DeveloperModeService().addLog('📥 [Network] 状态码: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final responseBody = utf8.decode(response.bodyBytes);
-        final truncatedBody = responseBody.length > 200 
-            ? '${responseBody.substring(0, 200)}...' 
-            : responseBody;
-        DeveloperModeService().addLog('📄 [Network] 响应体: $truncatedBody');
-
-        final data = json.decode(responseBody) as Map<String, dynamic>;
-        final code = data['code'];
-
-        // 洛雪音源响应码处理
-        if (code == 0) {
-          final audioUrl = data['url'] as String?;
-          if (audioUrl == null || audioUrl.isEmpty) {
-            print('❌ [MusicService] 洛雪音源返回空 URL');
-            DeveloperModeService().addLog('❌ [MusicService] 返回空 URL');
-            return null;
-          }
-
-          print('✅ [MusicService] 洛雪音源获取成功');
-          print('   🔗 URL: ${audioUrl.length > 50 ? "${audioUrl.substring(0, 50)}..." : audioUrl}');
-          DeveloperModeService().addLog('✅ [MusicService] 获取成功');
-
-          // 洛雪音源只返回 URL，创建一个简化的 SongDetail
-          // 注意：歌曲元数据（名称、艺术家、封面等）需要从其他地方获取
-          return SongDetail(
-            id: songId,
-            name: '', // 需要从 Track 信息获取
-            pic: '',  // 需要从 Track 信息获取
-            arName: '', // 需要从 Track 信息获取
-            alName: '', // 需要从 Track 信息获取
-            level: audioSourceService.getLxQuality(quality),
-            size: '0',
-            url: audioUrl,
-            lyric: '', // 洛雪音源不提供歌词，需要从其他来源获取
-            tlyric: '',
-            source: source,
-          );
-        } else {
-          // 处理洛雪音源错误码
-          final errorMsg = _getLxErrorMessage(code, data['msg']);
-          print('❌ [MusicService] 洛雪音源错误: $errorMsg');
-          DeveloperModeService().addLog('❌ [MusicService] 错误: $errorMsg');
-          throw Exception(errorMsg);
-        }
-      } else {
-        print('❌ [MusicService] 洛雪音源请求失败: HTTP ${response.statusCode}');
-        DeveloperModeService().addLog('❌ [Network] HTTP ${response.statusCode}');
+      if (audioUrl == null || audioUrl.isEmpty) {
+        print('❌ [MusicService] 洛雪音源返回空 URL');
+        DeveloperModeService().addLog('❌ [MusicService] 返回空 URL');
         return null;
       }
+
+      print('✅ [MusicService] 洛雪音源获取成功');
+      print('   🔗 URL: ${audioUrl.length > 50 ? "${audioUrl.substring(0, 50)}..." : audioUrl}');
+      DeveloperModeService().addLog('✅ [MusicService] 获取成功');
+
+      // 洛雪音源只返回 URL，创建一个简化的 SongDetail
+      // 注意：歌曲元数据（名称、艺术家、封面等）需要从其他地方获取
+      return SongDetail(
+        id: songId,
+        name: '', // 需要从 Track 信息获取
+        pic: '',  // 需要从 Track 信息获取
+        arName: '', // 需要从 Track 信息获取
+        alName: '', // 需要从 Track 信息获取
+        level: lxQuality,
+        size: '0',
+        url: audioUrl,
+        lyric: '', // 洛雪音源不提供歌词，需要从其他来源获取
+        tlyric: '',
+        source: source,
+      );
     } catch (e) {
       if (e is UnsupportedError) rethrow;
       print('❌ [MusicService] 洛雪音源异常: $e');

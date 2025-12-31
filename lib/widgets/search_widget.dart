@@ -537,7 +537,9 @@ class _SearchWidgetState extends State<SearchWidget> {
       _searchService.search(keyword);
       
       final isMergeEnabled = DeveloperModeService().isSearchResultMergeEnabled;
-      final isArtistTab = isMergeEnabled ? _currentTabIndex == 1 : _currentTabIndex == 5;
+      // 合并模式: 歌手索引为 1，分平台模式: 歌手索引为平台数量
+      final artistTabIndex = isMergeEnabled ? 1 : _getSupportedPlatformCodes().length;
+      final isArtistTab = _currentTabIndex == artistTabIndex;
       
       if (isArtistTab) {
         _searchArtists(keyword);
@@ -554,7 +556,9 @@ class _SearchWidgetState extends State<SearchWidget> {
 
   void _handleTabChanged(int index) {
     final isMergeEnabled = DeveloperModeService().isSearchResultMergeEnabled;
-    final isArtistTab = isMergeEnabled ? index == 1 : index == 5;
+    // 合并模式: 歌手索引为 1，分平台模式: 歌手索引为平台数量
+    final artistTabIndex = isMergeEnabled ? 1 : _getSupportedPlatformCodes().length;
+    final isArtistTab = index == artistTabIndex;
     
     if (_currentTabIndex == index) {
       if (isArtistTab) {
@@ -1947,6 +1951,67 @@ class _SearchWidgetState extends State<SearchWidget> {
     );
   }
 
+  /// 获取当前平台 tab 列表（根据音源支持情况动态生成）
+  List<String> _getPlatformTabs() {
+    try {
+      final supportedPlatforms = _searchService.currentSupportedPlatforms;
+      final tabs = <String>[];
+      
+      // 平台代码到显示名称的映射
+      const platformLabels = {
+        'netease': '网易云',
+        'apple': 'Apple',
+        'qq': 'QQ音乐',
+        'kugou': '酷狗',
+        'kuwo': '酷我',
+      };
+      
+      // 按固定顺序添加支持的平台
+      for (final platform in ['netease', 'apple', 'qq', 'kugou', 'kuwo']) {
+        if (supportedPlatforms.contains(platform)) {
+          tabs.add(platformLabels[platform]!);
+        }
+      }
+      
+      // 如果没有任何平台，返回默认所有平台
+      if (tabs.isEmpty) {
+        tabs.addAll(['网易云', 'Apple', 'QQ音乐', '酷狗', '酷我']);
+      }
+      
+      tabs.add('歌手'); // 歌手 tab 始终显示
+      return tabs;
+    } catch (e) {
+      // 出现异常时返回默认 tabs
+      print('⚠️ [SearchWidget] _getPlatformTabs error: $e');
+      return ['网易云', 'Apple', 'QQ音乐', '酷狗', '酷我', '歌手'];
+    }
+  }
+  
+  /// 获取当前支持的平台代码列表（排序后）
+  List<String> _getSupportedPlatformCodes() {
+    try {
+      final supportedPlatforms = _searchService.currentSupportedPlatforms;
+      final codes = <String>[];
+      
+      for (final platform in ['netease', 'apple', 'qq', 'kugou', 'kuwo']) {
+        if (supportedPlatforms.contains(platform)) {
+          codes.add(platform);
+        }
+      }
+      
+      // 如果没有任何平台，返回默认所有平台
+      if (codes.isEmpty) {
+        return ['netease', 'apple', 'qq', 'kugou', 'kuwo'];
+      }
+      
+      return codes;
+    } catch (e) {
+      // 出现异常时返回默认平台列表
+      print('⚠️ [SearchWidget] _getSupportedPlatformCodes error: $e');
+      return ['netease', 'apple', 'qq', 'kugou', 'kuwo'];
+    }
+  }
+
   Widget _buildSearchTabsArea(
     BuildContext context,
     SearchResult searchResult, {
@@ -1955,7 +2020,7 @@ class _SearchWidgetState extends State<SearchWidget> {
     final isMergeEnabled = DeveloperModeService().isSearchResultMergeEnabled;
     final tabs = isMergeEnabled 
         ? ['歌曲', '歌手'] 
-        : ['网易云', 'Apple', 'QQ音乐', '酷狗', '酷我', '歌手'];
+        : _getPlatformTabs();
 
     if (_isFluent) {
       return Column(
@@ -1979,7 +2044,7 @@ class _SearchWidgetState extends State<SearchWidget> {
           padding: padding,
           child: _SearchCapsuleTabs(
             tabs: tabs,
-            currentIndex: _currentTabIndex,
+            currentIndex: _currentTabIndex.clamp(0, tabs.length - 1),
             onChanged: _handleTabChanged,
           ),
         ),
@@ -2029,61 +2094,64 @@ class _SearchWidgetState extends State<SearchWidget> {
         child: _buildArtistResults(),
       );
     } else {
-      // 分平台模式：['网易云', 'Apple', 'QQ音乐', '酷狗', '酷我', '歌手']
-      switch (tabIndex) {
-        case 0:
-          return Container(
-            key: const ValueKey('netease_tab'),
-            color: backgroundColor,
-            child: _buildSinglePlatformList(
-              searchResult.neteaseResults,
-              searchResult.neteaseLoading,
-            ),
-          );
-        case 1:
-          return Container(
-            key: const ValueKey('apple_tab'),
-            color: backgroundColor,
-            child: _buildSinglePlatformList(
-              searchResult.appleResults,
-              searchResult.appleLoading,
-            ),
-          );
-        case 2:
-          return Container(
-            key: const ValueKey('qq_tab'),
-            color: backgroundColor,
-            child: _buildSinglePlatformList(
-              searchResult.qqResults,
-              searchResult.qqLoading,
-            ),
-          );
-        case 3:
-          return Container(
-            key: const ValueKey('kugou_tab'),
-            color: backgroundColor,
-            child: _buildSinglePlatformList(
-              searchResult.kugouResults,
-              searchResult.kugouLoading,
-            ),
-          );
-        case 4:
-          return Container(
-            key: const ValueKey('kuwo_tab'),
-            color: backgroundColor,
-            child: _buildSinglePlatformList(
-              searchResult.kuwoResults,
-              searchResult.kuwoLoading,
-            ),
-          );
-        case 5:
-        default:
-          return Container(
-            key: const ValueKey('artists_tab'),
-            color: backgroundColor,
-            child: _buildArtistResults(),
-          );
+      // 分平台模式：根据当前音源支持的平台动态显示
+      final platformCodes = _getSupportedPlatformCodes();
+      
+      // 如果 tabIndex 在平台范围内，显示对应平台的结果
+      if (tabIndex < platformCodes.length) {
+        final platform = platformCodes[tabIndex];
+        
+        List<Track> results;
+        bool isLoading;
+        String valueKey;
+        
+        switch (platform) {
+          case 'netease':
+            results = searchResult.neteaseResults;
+            isLoading = searchResult.neteaseLoading;
+            valueKey = 'netease_tab';
+            break;
+          case 'apple':
+            results = searchResult.appleResults;
+            isLoading = searchResult.appleLoading;
+            valueKey = 'apple_tab';
+            break;
+          case 'qq':
+            results = searchResult.qqResults;
+            isLoading = searchResult.qqLoading;
+            valueKey = 'qq_tab';
+            break;
+          case 'kugou':
+            results = searchResult.kugouResults;
+            isLoading = searchResult.kugouLoading;
+            valueKey = 'kugou_tab';
+            break;
+          case 'kuwo':
+            results = searchResult.kuwoResults;
+            isLoading = searchResult.kuwoLoading;
+            valueKey = 'kuwo_tab';
+            break;
+          default:
+            return Container(
+              key: const ValueKey('artists_tab'),
+              color: backgroundColor,
+              child: _buildArtistResults(),
+            );
+        }
+        
+        return Container(
+          key: ValueKey(valueKey),
+          color: backgroundColor,
+          child: _buildSinglePlatformList(results, isLoading),
+        );
       }
+      
+      // 最后一个 tab 是歌手
+      return Container(
+        key: const ValueKey('artists_tab'),
+        color: backgroundColor,
+        child: _buildArtistResults(),
+      );
     }
   }
 

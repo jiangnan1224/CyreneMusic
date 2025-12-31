@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/track.dart';
 import '../models/merged_track.dart';
 import 'url_service.dart';
+import 'audio_source_service.dart';
 
 /// 搜索结果模型
 class SearchResult {
@@ -110,7 +111,7 @@ class SearchService extends ChangeNotifier {
   static const String _historyKey = 'search_history';
   static const int _maxHistoryCount = 20; // 最多保存20条历史记录
 
-  /// 搜索歌曲（四个平台并行）
+  /// 搜索歌曲（根据当前音源支持的平台并行搜索）
   Future<void> search(String keyword) async {
     if (keyword.trim().isEmpty) {
       return;
@@ -121,29 +122,37 @@ class SearchService extends ChangeNotifier {
     // 保存到搜索历史
     await _addToSearchHistory(keyword);
     
-    // 重置搜索结果，设置加载状态
+    // 获取当前音源支持的平台
+    final supportedPlatforms = AudioSourceService().currentSupportedPlatforms;
+    print('🔍 [SearchService] 当前音源支持的平台: $supportedPlatforms');
+    
+    // 根据支持的平台设置加载状态
     _searchResult = SearchResult(
-      neteaseLoading: true,
-      appleLoading: true,
-      qqLoading: true,
-      kugouLoading: true,
-      kuwoLoading: true,
+      neteaseLoading: supportedPlatforms.contains('netease'),
+      appleLoading: supportedPlatforms.contains('apple'),
+      qqLoading: supportedPlatforms.contains('qq'),
+      kugouLoading: supportedPlatforms.contains('kugou'),
+      kuwoLoading: supportedPlatforms.contains('kuwo'),
     );
     notifyListeners();
 
     print('🔍 [SearchService] 开始搜索: $keyword');
 
-    // 并行搜索五个平台
-    await Future.wait([
-      _searchNetease(keyword),
-      _searchApple(keyword),
-      _searchQQ(keyword),
-      _searchKugou(keyword),
-      _searchKuwo(keyword),
-    ]);
+    // 只向支持的平台发送搜索请求
+    final futures = <Future<void>>[];
+    if (supportedPlatforms.contains('netease')) futures.add(_searchNetease(keyword));
+    if (supportedPlatforms.contains('apple')) futures.add(_searchApple(keyword));
+    if (supportedPlatforms.contains('qq')) futures.add(_searchQQ(keyword));
+    if (supportedPlatforms.contains('kugou')) futures.add(_searchKugou(keyword));
+    if (supportedPlatforms.contains('kuwo')) futures.add(_searchKuwo(keyword));
+    
+    await Future.wait(futures);
 
     print('✅ [SearchService] 搜索完成，共 ${_searchResult.totalCount} 条结果');
   }
+
+  /// 获取当前音源支持的搜索平台列表
+  List<String> get currentSupportedPlatforms => AudioSourceService().currentSupportedPlatforms;
 
   /// 搜索网易云音乐
   Future<void> _searchNetease(String keyword) async {

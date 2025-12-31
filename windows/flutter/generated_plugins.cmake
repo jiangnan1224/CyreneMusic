@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   bitsdojo_window_windows
   dynamic_color
   flutter_acrylic
+  flutter_inappwebview_windows
   media_kit_libs_windows_video
   media_kit_video
   permission_handler_windows

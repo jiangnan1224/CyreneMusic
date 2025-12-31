@@ -24,19 +24,32 @@ class LxMusicSourceConfig {
   /// URL 路径模板（用于构建请求 URL）
   final String urlPathTemplate;
 
+  /// 音源作者
+  final String author;
+
+  /// 音源描述
+  final String description;
+
+  /// 脚本原始内容
+  final String scriptContent;
+
   LxMusicSourceConfig({
     required this.name,
     required this.version,
     required this.apiUrl,
     required this.apiKey,
     required this.source,
+    required this.scriptContent,
+    this.author = '',
+    this.description = '',
     this.urlPathTemplate = '',
   });
 
   /// 检查配置是否有效
   /// 
-  /// 至少需要有 API URL 才算有效配置
-  bool get isValid => apiUrl.isNotEmpty;
+  /// 只要有脚本内容，就认为是有效的（支持运行时环境）
+  /// 或者有 API URL（支持旧版解析）
+  bool get isValid => scriptContent.isNotEmpty || apiUrl.isNotEmpty;
 }
 
 /// 洛雪音源脚本解析器
@@ -150,9 +163,17 @@ class LxMusicSourceParser {
       // 提取 URL 路径模板
       String urlPathTemplate = _extractUrlPathTemplate(scriptContent);
 
+      // 提取作者
+      String author = _extractAuthor(scriptContent);
+
+      // 提取描述
+      String description = _extractDescription(scriptContent);
+
       print('📋 [LxMusicSourceParser] 解析结果:');
       print('   名称: $name');
       print('   版本: $version');
+      print('   作者: ${author.isNotEmpty ? author : "(未找到)"}');
+      print('   描述: ${description.isNotEmpty ? description : "(未找到)"}');
       print('   API URL: $apiUrl');
       print('   API Key: ${apiKey.isNotEmpty ? "(已提取)" : "(未找到)"}');
       print('   路径模板: ${urlPathTemplate.isNotEmpty ? urlPathTemplate : "(未找到)"}');
@@ -163,6 +184,9 @@ class LxMusicSourceParser {
         apiUrl: apiUrl,
         apiKey: apiKey,
         source: source,
+        scriptContent: scriptContent,
+        author: author,
+        description: description,
         urlPathTemplate: urlPathTemplate,
       );
     } catch (e) {
@@ -213,22 +237,31 @@ class LxMusicSourceParser {
   String _extractApiUrl(String script) {
     // 常见的 API URL 提取模式
     final urlPatterns = [
-      // 直接匹配 http/https URL
-      RegExp(r'''['"]?(https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+)['"]?'''),
-      // 匹配 apiUrl 或 api_url 变量
+      // 匹配 apiUrl 或 api_url 变量（优先）
       RegExp(r'''apiUrl\s*[:=]\s*['"]([^'"]+)['"]'''),
       RegExp(r'''api[_-]?url\s*[:=]\s*['"]([^'"]+)['"]'''),
       // 匹配 host 变量
       RegExp(r'''host\s*[:=]\s*['"]([^'"]+)['"]'''),
       // 匹配 baseUrl
       RegExp(r'''baseUrl\s*[:=]\s*['"]([^'"]+)['"]'''),
+      // 直接匹配 http/https URL（不包含引号在字符类中）
+      RegExp(r'''['"]?(https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&()*+,;=%]+)['"]?'''),
     ];
 
     for (final pattern in urlPatterns) {
       final matches = pattern.allMatches(script);
       for (final match in matches) {
-        final url = match.group(1);
-        if (url != null && _isValidApiUrl(url)) {
+        final matchedUrl = match.group(1);
+        if (matchedUrl != null && _isValidApiUrl(matchedUrl)) {
+          // 清理 URL，移除可能错误包含的引号和空格
+          String url = matchedUrl.trim();
+          // 移除首尾引号
+          while (url.startsWith("'") || url.startsWith('"')) {
+            url = url.substring(1);
+          }
+          while (url.endsWith("'") || url.endsWith('"')) {
+            url = url.substring(0, url.length - 1);
+          }
           return url;
         }
       }
@@ -302,7 +335,42 @@ class LxMusicSourceParser {
       }
     }
 
-    // 默认模板
     return '/url/{source}/{songId}/{quality}';
+  }
+
+  /// 提取作者
+  String _extractAuthor(String script) {
+    // 尝试匹配 author: 'xxx' 或 @author xxx
+    final authorPatterns = [
+      RegExp(r'''author\s*:\s*['"]([^'"]+)['"]'''),
+      RegExp(r'''['"]author['"]\s*:\s*['"]([^'"]+)['"]'''),
+      RegExp(r'''@author\s+([^\s]+)'''),
+    ];
+
+    for (final pattern in authorPatterns) {
+      final match = pattern.firstMatch(script);
+      if (match != null) {
+        return match.group(1) ?? '';
+      }
+    }
+    return '';
+  }
+
+  /// 提取描述
+  String _extractDescription(String script) {
+    // 尝试匹配 description: 'xxx' 或 @description xxx
+    final descPatterns = [
+      RegExp(r'''description\s*:\s*['"]([^'"]+)['"]'''),
+      RegExp(r'''['"]description['"]\s*:\s*['"]([^'"]+)['"]'''),
+      RegExp(r'''@description\s+(.+)'''),
+    ];
+
+    for (final pattern in descPatterns) {
+      final match = pattern.firstMatch(script);
+      if (match != null) {
+        return match.group(1) ?? '';
+      }
+    }
+    return '';
   }
 }

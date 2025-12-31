@@ -4,6 +4,7 @@
 #include <shobjidl.h>
 #include <propkey.h>
 #include <propvarutil.h>
+#include <cstdlib>
 
 #include "flutter_window.h"
 #include "utils.h"
@@ -54,6 +55,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // 这将在 FlutterWindow 创建后设置应用显示名称
 
   flutter::DartProject project(L"data");
+
+  // 启用 Impeller 渲染引擎以支持高刷新率
+  // 通过环境变量设置引擎开关，Impeller 使用 Direct3D 后端
+  // 可以更好地匹配显示器刷新率（如 120Hz、144Hz 等）
+  _putenv_s("FLUTTER_ENGINE_SWITCHES", "1");
+  _putenv_s("FLUTTER_ENGINE_SWITCH_1", "enable-impeller=true");
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();

@@ -28,6 +28,7 @@ import 'package:cyrene_music/services/system_media_service.dart';
 import 'package:cyrene_music/services/tray_service.dart';
 import 'package:cyrene_music/services/url_service.dart';
 import 'package:cyrene_music/services/audio_source_service.dart';
+import 'package:cyrene_music/services/auth_service.dart';
 import 'package:cyrene_music/services/version_service.dart';
 import 'package:cyrene_music/services/mini_player_window_service.dart';
 import 'package:cyrene_music/services/local_library_service.dart';
@@ -37,6 +38,8 @@ import 'package:cyrene_music/services/startup_logger.dart';
 import 'package:flutter_acrylic/flutter_acrylic.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:cyrene_music/pages/settings_page/audio_source_settings.dart';
+import 'package:cyrene_music/pages/mobile_setup_page.dart';
+import 'package:cyrene_music/pages/mobile_app_gate.dart';
 
 // 条件导入 flutter_displaymode（仅 Android）
 import 'package:flutter_displaymode/flutter_displaymode.dart' if (dart.library.html) '';
@@ -435,6 +438,7 @@ class _MyAppState extends State<MyApp> {
           );
           
           // 使用 MaterialApp 包裹 CupertinoTheme 以保持 Navigator 等功能
+          // MobileAppGate 内部处理状态切换，避免重建 MaterialApp
           return MaterialApp(
             title: 'Cyrene Music',
             debugShowCheckedModeBanner: false,
@@ -454,10 +458,29 @@ class _MyAppState extends State<MyApp> {
                 child: child ?? const SizedBox.shrink(),
               );
             },
-            home: const MainLayout(),
+            home: const MobileAppGate(),
           );
         }
 
+        // 非 Cupertino 的 Material 布局
+        // 移动端使用 MobileAppGate 处理状态切换
+        if (Platform.isAndroid || Platform.isIOS) {
+          return MaterialApp(
+            title: 'Cyrene Music',
+            debugShowCheckedModeBanner: false,
+            navigatorKey: MyApp.navigatorKey,
+            theme: lightTheme,
+            darkTheme: darkTheme,
+            themeMode: themeManager.themeMode,
+            builder: (context, child) {
+              _GlobalContextHolder._context = context;
+              return child ?? const SizedBox.shrink();
+            },
+            home: const MobileAppGate(),
+          );
+        }
+
+        // 桌面端直接进入主布局
         return MaterialApp(
           title: 'Cyrene Music',
           debugShowCheckedModeBanner: false,
@@ -573,6 +596,94 @@ class _WindowsRoundedContainerState extends State<_WindowsRoundedContainer> with
           child: widget.child,
         ),
       ),
+    );
+  }
+}
+
+/// 显示音源未配置对话框
+void showAudioSourceNotConfiguredDialog(BuildContext context) {
+  final themeManager = ThemeManager();
+  final isFluent = Platform.isWindows && themeManager.isFluentFramework;
+  final isCupertino = (Platform.isIOS || Platform.isAndroid) && themeManager.isCupertinoFramework;
+
+  if (isFluent) {
+    fluent.showDialog(
+      context: context,
+      builder: (context) {
+        return fluent.ContentDialog(
+          title: const Text('音源失效'),
+          content: const Text('当前音源配置似乎已失效或无法连接，请重新配置音源。'),
+          actions: [
+            fluent.Button(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            fluent.FilledButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AudioSourceSettings()),
+                );
+              },
+              child: const Text('去配置'),
+            ),
+          ],
+        );
+      },
+    );
+  } else if (isCupertino) {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) {
+        return CupertinoAlertDialog(
+          title: const Text('音源失效'),
+          content: const Text('当前音源配置似乎已失效或无法连接，请重新配置音源。'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AudioSourceSettings()),
+                );
+              },
+              child: const Text('去配置'),
+            ),
+          ],
+        );
+      },
+    );
+  } else {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('音源失效'),
+          content: const Text('当前音源配置似乎已失效或无法连接，请重新配置音源。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AudioSourceSettings()),
+                );
+              },
+              child: const Text('去配置'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -1546,9 +1546,10 @@ class _HomePageState extends State<HomePage>
   ) {
     final breadcrumbs = _buildBreadcrumbItems(showTabs);
 
-    final fluentTheme = fluent.FluentTheme.of(context);
+    final fluentTheme = fluent.FluentTheme.maybeOf(context);
     final bool useWindowEffect =
         Platform.isWindows && ThemeManager().windowEffect != WindowEffect.disabled;
+    final micaBackgroundColor = fluentTheme?.micaBackgroundColor ?? Colors.transparent;
 
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1602,7 +1603,7 @@ class _HomePageState extends State<HomePage>
     );
 
     return Scaffold(
-      backgroundColor: useWindowEffect ? Colors.transparent : fluentTheme.micaBackgroundColor,
+      backgroundColor: useWindowEffect ? Colors.transparent : micaBackgroundColor,
       body: content,
     );
   }

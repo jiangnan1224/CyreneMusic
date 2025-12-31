@@ -114,6 +114,9 @@ dependencies:
   
   # Audio metadata reader for local music files
   audio_metadata_reader: ^1.4.2
+  
+  # InAppWebView for executing LxMusic source scripts in sandbox
+  flutter_inappwebview: ^6.0.0
 
 # 依赖覆盖：解决 screen_brightness_android 的网络问题
 dependency_overrides:

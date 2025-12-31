@@ -208,6 +208,12 @@ class _MoreMenuButtonState extends State<_MoreMenuButton> {
   bool _isHovering = false;
   bool _isMenuHovering = false;
 
+  /// 判断菜单是否使用深色背景
+  /// 由于菜单使用深色遮罩+白色文字设计，始终返回 true
+  bool _isPlayerBackgroundDark() {
+    return true;
+  }
+
   void _showMenu() {
     if (_overlayEntry != null) return;
     
@@ -247,31 +253,18 @@ class _MoreMenuButtonState extends State<_MoreMenuButton> {
                   borderRadius: BorderRadius.circular(16),  // 更圆润的边角
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                    child: Builder(
-                      builder: (context) {
-                        // 自适应主题颜色
-                        final isDark = Theme.of(context).brightness == Brightness.dark;
-                        final baseColor = isDark ? Colors.white : Colors.black;
-                        
-                        return Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                baseColor.withOpacity(isDark ? 0.15 : 0.08),
-                                baseColor.withOpacity(isDark ? 0.08 : 0.04),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: baseColor.withOpacity(isDark ? 0.2 : 0.15),
-                              width: 1,
-                            ),
-                          ),
-                          child: _buildMenuContent(),
-                        );
-                      },
+                    child: Container(
+                      // 深灰色半透明遮罩，确保白色文字可读
+                      // 无论背景是深色还是浅色，菜单始终使用深色毛玻璃效果 + 白色文字
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.45),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.15),
+                          width: 1,
+                        ),
+                      ),
+                      child: _buildMenuContent(),
                     ),
                   ),
                 ),
@@ -372,6 +365,45 @@ class _MoreMenuButtonState extends State<_MoreMenuButton> {
                   _showFontPicker(context);
                 },
               ),
+
+              // 歌词对齐 (新增)
+              _buildMenuItem(
+                icon: lyricStyle.currentAlignment == LyricAlignment.center 
+                    ? Icons.format_align_center_rounded 
+                    : Icons.vertical_align_top_rounded,
+                label: '歌词对齐',
+                subtitle: lyricStyle.currentAlignment == LyricAlignment.center 
+                    ? '居中对齐' 
+                    : '顶部对齐',
+                iconColor: Colors.teal[300],
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Colors.teal.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    lyricStyle.currentAlignment == LyricAlignment.center ? '居中' : '顶部',
+                    style: TextStyle(
+                      color: Colors.teal[300],
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Microsoft YaHei',
+                    ),
+                  ),
+                ),
+                onTap: () {
+                  final newAlignment = lyricStyle.currentAlignment == LyricAlignment.center 
+                      ? LyricAlignment.top 
+                      : LyricAlignment.center;
+                  lyricStyle.setAlignment(newAlignment);
+                  _overlayEntry?.markNeedsBuild();
+                },
+              ),
               
               _buildSectionDivider(),
               
@@ -435,7 +467,7 @@ class _MoreMenuButtonState extends State<_MoreMenuButton> {
   Widget _buildSectionTitle(String title) {
     return Builder(
       builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final isDark = _isPlayerBackgroundDark();
         final textColor = isDark ? Colors.white : Colors.black;
         
         return Padding(
@@ -456,10 +488,11 @@ class _MoreMenuButtonState extends State<_MoreMenuButton> {
   }
   
   /// 构建分隔线
+  /// 构建分隔线
   Widget _buildSectionDivider() {
     return Builder(
       builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final isDark = _isPlayerBackgroundDark();
         final lineColor = isDark ? Colors.white : Colors.black;
         
         return Padding(
@@ -484,10 +517,11 @@ class _MoreMenuButtonState extends State<_MoreMenuButton> {
   }
   
   /// 构建切换指示器
+  /// 构建切换指示器
   Widget _buildSwitchIndicator(bool isOn) {
     return Builder(
       builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final isDark = _isPlayerBackgroundDark();
         final baseColor = isDark ? Colors.white : Colors.black;
         
         return Container(
@@ -607,7 +641,7 @@ class _MoreMenuButtonState extends State<_MoreMenuButton> {
   }) {
     return Builder(
       builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final isDark = _isPlayerBackgroundDark();
         final textColor = isDark ? Colors.white : Colors.black;
         final hoverColor = textColor.withOpacity(0.08);
         final splashColor = textColor.withOpacity(0.05);
