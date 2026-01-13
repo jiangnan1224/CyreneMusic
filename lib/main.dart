@@ -40,6 +40,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:cyrene_music/pages/settings_page/audio_source_settings.dart';
 import 'package:cyrene_music/pages/mobile_setup_page.dart';
 import 'package:cyrene_music/pages/mobile_app_gate.dart';
+import 'package:cyrene_music/pages/desktop_app_gate.dart';
 
 // 条件导入 flutter_displaymode（仅 Android）
 import 'package:flutter_displaymode/flutter_displaymode.dart' if (dart.library.html) '';
@@ -442,7 +443,7 @@ class _MyAppState extends State<MyApp> {
                     child: child ?? const SizedBox.shrink(),
                   );
                 },
-                home: isMiniMode ? const MiniPlayerWindowPage() : const FluentMainLayout(),
+                home: isMiniMode ? const MiniPlayerWindowPage() : const DesktopAppGate(),
               );
             },
           );

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'dart:typed_data';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent_ui;
 import 'package:flutter/material.dart';
@@ -18,6 +19,7 @@ import '../pages/auth/auth_page.dart';
 import '../pages/support_page.dart';
 import '../services/auth_service.dart';
 import '../services/auth_overlay_service.dart';
+import '../services/avatar_fetch_service.dart';
 import '../services/developer_mode_service.dart';
 import '../services/navigation_provider.dart';
 import '../services/home_search_service.dart';
@@ -485,20 +487,28 @@ class _FluentMainLayoutState extends State<FluentMainLayout> with WindowListener
     const double size = 28;
 
     if (isLogged && user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty) {
+      // 对 Linux Do 头像使用专用组件
+      final isLinuxDoAvatar = user.avatarUrl!.contains('linux.do');
       return GestureDetector(
         onTap: () => _navigationProvider.navigateTo(4), // 导航到「我的」页面
         child: ClipRRect(
           borderRadius: BorderRadius.circular(size / 2),
-          child: Image.network(
-            user.avatarUrl!,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => Icon(
-              fluent_ui.FluentIcons.contact,
-              size: size,
-            ),
-          ),
+          child: isLinuxDoAvatar
+              ? _LinuxDoAvatarTitleBar(
+                  url: user.avatarUrl!,
+                  userId: user.id,
+                  size: size,
+                )
+              : Image.network(
+                  user.avatarUrl!,
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    fluent_ui.FluentIcons.contact,
+                    size: size,
+                  ),
+                ),
         ),
       );
     }
@@ -882,3 +892,98 @@ class _DeferredSettingsPageState extends State<_DeferredSettingsPage> {
 
 enum _FluentUserAction { viewProfile, logout }
 
+/// 标题栏 Linux Do 头像组件
+class _LinuxDoAvatarTitleBar extends StatefulWidget {
+  final String url;
+  final int userId;
+  final double size;
+
+  const _LinuxDoAvatarTitleBar({
+    required this.url,
+    required this.userId,
+    required this.size,
+  });
+
+  @override
+  State<_LinuxDoAvatarTitleBar> createState() => _LinuxDoAvatarTitleBarState();
+}
+
+class _LinuxDoAvatarTitleBarState extends State<_LinuxDoAvatarTitleBar> {
+  Uint8List? _avatarData;
+  bool _isLoading = true;
+  bool _hasFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAvatar();
+  }
+
+  @override
+  void didUpdateWidget(_LinuxDoAvatarTitleBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _loadAvatar();
+    }
+  }
+
+  Future<void> _loadAvatar() async {
+    setState(() {
+      _isLoading = true;
+      _hasFailed = false;
+    });
+
+    try {
+      final data = await AvatarFetchService().fetchAvatar(
+        widget.url,
+        cacheKey: 'linuxdo_${widget.userId}',
+      );
+
+      if (mounted) {
+        setState(() {
+          _avatarData = data;
+          _isLoading = false;
+          _hasFailed = data == null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasFailed = true;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: const fluent_ui.ProgressRing(strokeWidth: 2),
+      );
+    }
+
+    if (_hasFailed || _avatarData == null) {
+      return Icon(
+        fluent_ui.FluentIcons.contact,
+        size: widget.size,
+      );
+    }
+
+    return Image.memory(
+      _avatarData!,
+      width: widget.size,
+      height: widget.size,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(
+          fluent_ui.FluentIcons.contact,
+          size: widget.size,
+        );
+      },
+    );
+  }
+}

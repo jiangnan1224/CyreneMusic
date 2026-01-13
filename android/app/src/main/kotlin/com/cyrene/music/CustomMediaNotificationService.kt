@@ -250,7 +250,7 @@ class CustomMediaNotificationService : Service() {
         val isPlaying = state.state == PlaybackStateCompat.STATE_PLAYING
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(description.title ?: "Cyrene Music")
             .setContentText(description.subtitle ?: description.description)
             .setSubText(description.extras?.getString("album"))

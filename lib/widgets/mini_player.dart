@@ -128,13 +128,18 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          _formatDuration(player.position),
-          style: TextStyle(
-            fontFamily: 'Microsoft YaHei',
-            fontSize: 12,
-            color: theme.resources.textFillColorSecondary,
-          ),
+        ValueListenableBuilder<Duration>(
+          valueListenable: player.positionNotifier,
+          builder: (context, position, child) {
+            return Text(
+              _formatDuration(position),
+              style: TextStyle(
+                fontFamily: 'Microsoft YaHei',
+                fontSize: 12,
+                color: theme.resources.textFillColorSecondary,
+              ),
+            );
+          },
         ),
         Text(
           ' / ',
@@ -356,6 +361,9 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
   void _openFullPlayer(BuildContext context) {
     Navigator.of(context).push(
       PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.transparent,
+        maintainState: true,
         pageBuilder: (context, animation, secondaryAnimation) => const PlayerPage(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(0.0, 1.0);
@@ -540,13 +548,18 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
                                             ? Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Text(
-                                                    _formatDuration(player.position),
-                                                    style: TextStyle(
-                                                      fontFamily: 'Microsoft YaHei',
-                                                      fontSize: 12,
-                                                      color: fluent.FluentTheme.of(context).resources.textFillColorSecondary,
-                                                    ),
+                                                  ValueListenableBuilder<Duration>(
+                                                    valueListenable: player.positionNotifier,
+                                                    builder: (context, position, child) {
+                                                      return Text(
+                                                        _formatDuration(position),
+                                                        style: TextStyle(
+                                                          fontFamily: 'Microsoft YaHei',
+                                                          fontSize: 12,
+                                                          color: fluent.FluentTheme.of(context).resources.textFillColorSecondary,
+                                                        ),
+                                                      );
+                                                    },
                                                   ),
                                                   Text(
                                                     ' / ',
@@ -574,9 +587,14 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
                                             : Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Text(
-                                                    _formatDuration(player.position),
-                                                    style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                                                  ValueListenableBuilder<Duration>(
+                                                    valueListenable: player.positionNotifier,
+                                                    builder: (context, position, child) {
+                                                      return Text(
+                                                        _formatDuration(position),
+                                                        style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                                                      );
+                                                    },
                                                   ),
                                                   const Text(' / '),
                                                   Text(
@@ -712,9 +730,14 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text(
-                                          _formatDuration(player.position),
-                                          style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                                        ValueListenableBuilder<Duration>(
+                                          valueListenable: player.positionNotifier,
+                                          builder: (context, position, child) {
+                                            return Text(
+                                              _formatDuration(position),
+                                              style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                                            );
+                                          },
                                         ),
                                         const Text(' / '),
                                         Text(
@@ -848,31 +871,37 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
   }
 
   /// 构建进度条
+  /// 使用 ValueListenableBuilder 监听 positionNotifier 以实时更新进度
   Widget _buildProgressBar(PlayerService player, ColorScheme colorScheme) {
-    final progress = player.duration.inMilliseconds > 0
-        ? player.position.inMilliseconds / player.duration.inMilliseconds
-        : 0.0;
-    if (ThemeManager().isFluentFramework) {
-      return fluent.ProgressBar(
-        value: progress,
-      );
-    }
-    if (_isCupertino) {
-      return Container(
-        height: 2,
-        child: LinearProgressIndicator(
+    return ValueListenableBuilder<Duration>(
+      valueListenable: player.positionNotifier,
+      builder: (context, position, child) {
+        final progress = player.duration.inMilliseconds > 0
+            ? position.inMilliseconds / player.duration.inMilliseconds
+            : 0.0;
+        if (ThemeManager().isFluentFramework) {
+          return fluent.ProgressBar(
+            value: progress,
+          );
+        }
+        if (_isCupertino) {
+          return Container(
+            height: 2,
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 2,
+              backgroundColor: CupertinoColors.systemGrey.withOpacity(0.2),
+              valueColor: const AlwaysStoppedAnimation<Color>(CupertinoColors.activeBlue),
+            ),
+          );
+        }
+        return LinearProgressIndicator(
           value: progress,
           minHeight: 2,
-          backgroundColor: CupertinoColors.systemGrey.withOpacity(0.2),
-          valueColor: const AlwaysStoppedAnimation<Color>(CupertinoColors.activeBlue),
-        ),
-      );
-    }
-    return LinearProgressIndicator(
-      value: progress,
-      minHeight: 2,
-      backgroundColor: colorScheme.surfaceContainerHighest,
-      valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
+          backgroundColor: colorScheme.surfaceContainerHighest,
+          valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
+        );
+      },
     );
   }
 
@@ -1132,12 +1161,17 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          _formatDuration(player.position),
-          style: TextStyle(
-            fontSize: 12,
-            color: CupertinoColors.systemGrey,
-          ),
+        ValueListenableBuilder<Duration>(
+          valueListenable: player.positionNotifier,
+          builder: (context, position, child) {
+            return Text(
+              _formatDuration(position),
+              style: TextStyle(
+                fontSize: 12,
+                color: CupertinoColors.systemGrey,
+              ),
+            );
+          },
         ),
         Text(
           ' / ',
@@ -1190,12 +1224,17 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
       mainAxisSize: MainAxisSize.min,
       children: [
         // 时长
-        Text(
-          _formatDuration(player.position),
-          style: TextStyle(
-            fontSize: 12,
-            color: colorScheme.onSurfaceVariant,
-          ),
+        ValueListenableBuilder<Duration>(
+          valueListenable: player.positionNotifier,
+          builder: (context, position, child) {
+            return Text(
+              _formatDuration(position),
+              style: TextStyle(
+                fontSize: 12,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            );
+          },
         ),
         const Text(' / '),
         Text(

@@ -17,6 +17,7 @@ import 'settings_page/third_party_accounts.dart';
 import 'settings_page/appearance_settings.dart';
 import 'settings_page/lyric_settings.dart';
 import 'settings_page/playback_settings.dart';
+import 'settings_page/search_settings.dart';
 import 'settings_page/network_settings.dart';
 import 'settings_page/storage_settings.dart';
 import 'settings_page/about_settings.dart';
@@ -335,6 +336,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     const PlaybackSettings(),
                     const SizedBox(height: 12),
                     
+                    // 搜索设置
+                    const SearchSettings(),
+                    const SizedBox(height: 12),
+                    
                     // 网络设置
                     NetworkSettings(onAudioSourceTap: () => openSubPage(SettingsSubPage.audioSource)),
                     const SizedBox(height: 12),
@@ -481,6 +486,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 header: '播放',
                 children: const [
                   PlaybackSettings(),
+                  SearchSettings(),
                 ],
               ),
               
@@ -751,6 +757,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     
                     // 播放设置
                     const PlaybackSettings(),
+                    const SizedBox(height: 16),
+                    
+                    // 搜索设置
+                    const SearchSettings(),
                     const SizedBox(height: 16),
                     
                     // 网络设置

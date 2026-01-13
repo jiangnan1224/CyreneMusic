@@ -26,12 +26,14 @@ class SearchWidget extends StatefulWidget {
   State<SearchWidget> createState() => _SearchWidgetState();
 }
 
-class _SearchCapsuleTabs extends StatelessWidget {
+
+/// Material Design Expressive 风格的 Tab 栏
+class _SearchExpressiveTabs extends StatelessWidget {
   final List<String> tabs;
   final int currentIndex;
   final ValueChanged<int> onChanged;
 
-  const _SearchCapsuleTabs({
+  const _SearchExpressiveTabs({
     required this.tabs,
     required this.currentIndex,
     required this.onChanged,
@@ -39,94 +41,71 @@ class _SearchCapsuleTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (tabs.isEmpty) {
-      return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    
+    // 品牌配色映射
+    Color getPlatformColor(String tab) {
+      if (tab.contains('网易云')) return const Color(0xFFE72D2D);
+      if (tab.contains('Apple')) return Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black;
+      if (tab.contains('QQ')) return const Color(0xFF31C27C);
+      if (tab.contains('酷狗')) return const Color(0xFF00A9FF);
+      if (tab.contains('酷我')) return const Color(0xFFFFD800);
+      if (tab.contains('歌手')) return cs.primary;
+      return cs.primary;
     }
-
-    final colorScheme = Theme.of(context).colorScheme;
-    final backgroundColor = colorScheme.surfaceContainerHighest;
-    final indicatorColor = colorScheme.primary;
-    final selectedTextColor = colorScheme.onPrimary;
-    final unselectedTextColor = colorScheme.onSurfaceVariant;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final count = tabs.length;
-        if (count == 0) {
-          return const SizedBox.shrink();
-        }
-
-        final totalWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : MediaQuery.sizeOf(context).width;
+        if (count == 0) return const SizedBox.shrink();
+        
+        final totalWidth = constraints.maxWidth;
         final tabWidth = totalWidth / count;
-        final height = 48.0;
-        final padding = 5.0;
-        final radius = height / 2;
-        final indicatorWidth = (tabWidth - padding * 2).clamp(0.0, tabWidth);
-
-        int safeIndex = currentIndex;
-        if (safeIndex < 0) {
-          safeIndex = 0;
-        } else if (safeIndex >= count) {
-          safeIndex = count - 1;
-        }
+        const height = 56.0;
 
         return SizedBox(
           height: height,
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: backgroundColor,
-                    borderRadius: BorderRadius.circular(radius),
-                  ),
-                ),
-              ),
+              // 底部指示器
               AnimatedPositioned(
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeInOutCubic,
-                top: padding,
-                bottom: padding,
-                left: padding + safeIndex * (tabWidth - padding * 2),
-                width: indicatorWidth,
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.fastOutSlowIn,
+                bottom: 4,
+                left: currentIndex * tabWidth + (tabWidth - 28) / 2,
+                width: 28,
+                height: 4,
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 280),
-                  curve: Curves.easeInOutCubic,
+                  duration: const Duration(milliseconds: 300),
                   decoration: BoxDecoration(
-                    color: indicatorColor,
-                    borderRadius: BorderRadius.circular(radius - padding),
-                    boxShadow: [
-                      BoxShadow(
-                        color: indicatorColor.withOpacity(0.25),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    color: getPlatformColor(tabs[currentIndex]),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
+              // Tab 标签
               Row(
-                children: List.generate(count, (index) {
-                  final selected = index == safeIndex;
-                  return SizedBox(
-                    width: tabWidth,
-                    height: height,
+                children: List.generate(count, (i) {
+                  final selected = i == currentIndex;
+                  final platformColor = getPlatformColor(tabs[i]);
+                  
+                  return Expanded(
                     child: GestureDetector(
+                      onTap: () => onChanged(i),
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => onChanged(index),
-                      child: Center(
+                      child: Container(
+                        alignment: Alignment.center,
                         child: AnimatedDefaultTextStyle(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeInOut,
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
                           style: TextStyle(
-                            color:
-                                selected ? selectedTextColor : unselectedTextColor,
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w500,
+                            color: selected ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87) : cs.onSurface.withOpacity(0.5),
+                            fontSize: selected ? 19 : 15,
+                            fontWeight: selected ? FontWeight.w900 : FontWeight.w600,
+                            letterSpacing: selected ? -0.2 : 0,
                           ),
-                          child: Text(tabs[index]),
+                          child: Text(tabs[i]),
                         ),
                       ),
                     ),
@@ -625,58 +604,87 @@ class _SearchWidgetState extends State<SearchWidget> {
               children: [
                 // 搜索栏
                 Container(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.fromLTRB(12, 16, 16, 16),
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                   child: Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.arrow_back),
+                        icon: const Icon(Icons.arrow_back_ios_new, size: 20),
                         onPressed: widget.onClose,
                         tooltip: '返回',
+                        padding: EdgeInsets.zero,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 4),
                       Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          autofocus: true,
-                          decoration: InputDecoration(
-                            hintText: '搜索歌曲、歌手...',
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon: _searchController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      _searchService.clear();
-                                      setState(() {});
-                                    },
-                                  )
-                                : null,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: colorScheme.surfaceContainerHighest,
+                        child: Container(
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(26),
                           ),
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (_) => _performSearch(),
-                          onChanged: (_) => setState(() {}),
+                          child: TextField(
+                            controller: _searchController,
+                            autofocus: true,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: '搜索歌曲、歌手...',
+                              hintStyle: TextStyle(
+                                color: colorScheme.onSurfaceVariant.withOpacity(0.6),
+                                fontSize: 16,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.search,
+                                color: colorScheme.primary.withOpacity(0.7),
+                                size: 22,
+                              ),
+                              suffixIcon: _searchController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.close, size: 20),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        _searchService.clear();
+                                        setState(() {});
+                                      },
+                                    )
+                                  : null,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                                horizontal: 16,
+                              ),
+                            ),
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => _performSearch(),
+                            onChanged: (_) => setState(() {}),
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: _performSearch,
-                        child: const Text('搜索'),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          onPressed: _performSearch,
+                          style: FilledButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            elevation: 2,
+                            shadowColor: colorScheme.primary.withOpacity(0.3),
+                          ),
+                          child: const Text(
+                            '搜索',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1843,7 +1851,9 @@ class _SearchWidgetState extends State<SearchWidget> {
     final content = Column(
       children: [
         header,
-        Divider(height: 1, color: dividerColor),
+        if (_isFluent || _isCupertino)
+          Divider(height: 1, color: dividerColor),
+
         Expanded(
           child: _secondaryAlbumId != null
               ? AlbumDetailPage(albumId: _secondaryAlbumId!, embedded: true)
@@ -2042,7 +2052,7 @@ class _SearchWidgetState extends State<SearchWidget> {
       children: [
         Padding(
           padding: padding,
-          child: _SearchCapsuleTabs(
+          child: _SearchExpressiveTabs(
             tabs: tabs,
             currentIndex: _currentTabIndex.clamp(0, tabs.length - 1),
             onChanged: _handleTabChanged,
@@ -2261,68 +2271,159 @@ class _SearchWidgetState extends State<SearchWidget> {
   }
 
   Widget _buildSingleTrackItem(Track track) {
-    final placeholderColor = _isFluent
-        ? fluent.FluentTheme.of(
-                context,
-              ).resources?.controlAltFillColorSecondary ??
-              Colors.black.withOpacity(0.05)
-        : Theme.of(context).colorScheme.surfaceContainerHighest;
+    if (_isFluent) {
+      final placeholderColor = fluent.FluentTheme.of(context).resources?.controlAltFillColorSecondary ??
+          Colors.black.withOpacity(0.05);
 
-    final leading = ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: CachedNetworkImage(
-        imageUrl: track.picUrl,
-        width: 50,
-        height: 50,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
+      final leading = ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: CachedNetworkImage(
+          imageUrl: track.picUrl,
           width: 50,
           height: 50,
-          color: placeholderColor,
-          child: const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+          fit: BoxFit.cover,
+          placeholder: (context, url) => Container(
+            width: 50,
+            height: 50,
+            color: placeholderColor,
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+          errorWidget: (context, url, error) => Container(
+            width: 50,
+            height: 50,
+            color: placeholderColor,
+            child: Icon(
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ),
-        errorWidget: (context, url, error) => Container(
-          width: 50,
-          height: 50,
-          color: placeholderColor,
-          child: Icon(
-            Icons.music_note,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
+      );
 
-    final tile = _buildAdaptiveListTile(
-      leading: leading,
-      title: Text(
-        track.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        '${track.artists} • ${track.album}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      trailing: TrackMoreButton(
+      final tile = _buildAdaptiveListTile(
+        leading: leading,
+        title: Text(
+          track.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          '${track.artists} • ${track.album}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        trailing: TrackMoreButton(
+          track: track,
+          onPlay: () => _playSingleTrack(track),
+        ),
+        onPressed: () => _playSingleTrack(track),
+      );
+
+      return _wrapCard(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: EdgeInsets.zero,
+        child: tile,
+      );
+    }
+
+    // Material Expressive Style
+    final cs = Theme.of(context).colorScheme;
+    
+    return InkWell(
+      onTap: () => _playSingleTrack(track),
+      onLongPress: () => TrackActionMenu.show(
+        context: context,
         track: track,
         onPlay: () => _playSingleTrack(track),
       ),
-      onPressed: () => _playSingleTrack(track),
-    );
-
-    return _wrapCard(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: EdgeInsets.zero,
-      child: tile,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        child: Row(
+          children: [
+            // 大尺寸高圆角封面
+            Hero(
+              tag: 'search_track_${track.id}_${track.source}',
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: CachedNetworkImage(
+                    imageUrl: track.picUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: cs.surfaceContainerHighest,
+                      child: const Center(
+                        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: cs.surfaceContainerHighest,
+                      child: Icon(Icons.music_note, color: cs.primary.withOpacity(0.5)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // 文字内容
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    track.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${track.artists} · ${track.album}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurfaceVariant.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // 操作按钮
+            TrackMoreButton(
+              track: track,
+              onPlay: () => _playSingleTrack(track),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2446,79 +2547,85 @@ class _SearchWidgetState extends State<SearchWidget> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       itemCount: _artistResults.length,
       itemBuilder: (context, index) {
         final artist = _artistResults[index];
-        final leading = artist.picUrl.isEmpty
-            ? (_isFluent
-                  ? fluent.CircleAvatar(
-                      radius: 24,
-                      child: Icon(
-                        fluent.FluentIcons.contact,
-                        color: fluent.FluentTheme.of(
-                          context,
-                        ).resources?.textFillColorSecondary,
-                      ),
+        final cs = Theme.of(context).colorScheme;
+
+        // Expressive Artist Avatar
+        final avatar = Hero(
+          tag: 'search_artist_${artist.id}',
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: artist.picUrl.isEmpty
+                  ? Container(
+                      color: cs.surfaceContainerHighest,
+                      child: Icon(Icons.person, size: 32, color: cs.primary.withOpacity(0.5)),
                     )
-                  : CircleAvatar(
-                      radius: 24,
-                      child: Icon(
-                        Icons.person,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ))
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: CachedNetworkImage(
-                  imageUrl: artist.picUrl,
-                  width: 48,
-                  height: 48,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    width: 48,
-                    height: 48,
-                    color: _isFluent
-                        ? fluent.FluentTheme.of(
-                                context,
-                              ).resources?.controlAltFillColorSecondary ??
-                              Colors.black.withOpacity(0.05)
-                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: const Center(
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                  : CachedNetworkImage(
+                      imageUrl: artist.picUrl,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        color: cs.surfaceContainerHighest,
+                        child: const Center(
+                          child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              );
-
-        final trailing = _isFluent
-            ? const Icon(fluent.FluentIcons.chevron_right)
-            : const Icon(Icons.chevron_right);
-
-        final tile = _buildAdaptiveListTile(
-          leading: leading,
-          title: Text(
-            artist.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            ),
           ),
-          trailing: trailing,
-          onPressed: () {
+        );
+
+        if (_isFluent) {
+           // Keep Fluent matching standard if needed, or adapt slightly.
+           // For now, let's keep the Material Expressive as primary focus.
+        }
+
+        return InkWell(
+          onTap: () {
             setState(() {
               _secondaryArtistId = artist.id;
               _secondaryArtistName = artist.name;
             });
           },
-        );
-
-        return _wrapCard(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: EdgeInsets.zero,
-          child: tile,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Row(
+              children: [
+                avatar,
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Text(
+                    artist.name,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                      letterSpacing: -0.5,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Icon(Icons.arrow_forward_ios, size: 16, color: cs.onSurfaceVariant.withOpacity(0.5)),
+              ],
+            ),
+          ),
         );
       },
     );
@@ -2526,17 +2633,57 @@ class _SearchWidgetState extends State<SearchWidget> {
 
   /// 构建搜索头部（统计信息）
   Widget _buildSearchHeader(int totalCount, SearchResult result) {
-    final textStyle = Theme.of(
-      context,
-    ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold);
+    if (_isFluent) {
+      final textStyle = Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold);
+      return _wrapCard(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const Icon(Icons.music_note, size: 20),
+            const SizedBox(width: 8),
+            Text('找到 $totalCount 首歌曲', style: textStyle),
+          ],
+        ),
+      );
+    }
 
-    return _wrapCard(
-      padding: const EdgeInsets.all(12),
+    final cs = Theme.of(context).colorScheme;
+    
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 16),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
         children: [
-          const Icon(Icons.music_note, size: 20),
-          const SizedBox(width: 8),
-          Text('找到 $totalCount 首歌曲', style: textStyle),
+          Text(
+            '找到',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '$totalCount',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: cs.primary,
+              letterSpacing: -1,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '首歌曲',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const Spacer(),
+          // 如果有多个来源，可以在这里显示一个小徽章
         ],
       ),
     );
@@ -2544,72 +2691,158 @@ class _SearchWidgetState extends State<SearchWidget> {
 
   /// 构建合并后的歌曲项
   Widget _buildMergedTrackItem(MergedTrack mergedTrack) {
-    final placeholderColor = _isFluent
-        ? fluent.FluentTheme.of(
-                context,
-              ).resources?.controlAltFillColorSecondary ??
-              Colors.black.withOpacity(0.05)
-        : Theme.of(context).colorScheme.surfaceContainerHighest;
+    if (_isFluent) {
+      final placeholderColor = fluent.FluentTheme.of(context).resources?.controlAltFillColorSecondary ??
+          Colors.black.withOpacity(0.05);
 
-    final leading = ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: CachedNetworkImage(
-        imageUrl: mergedTrack.picUrl,
-        width: 50,
-        height: 50,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
+      final leading = ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: CachedNetworkImage(
+          imageUrl: mergedTrack.picUrl,
           width: 50,
           height: 50,
-          color: placeholderColor,
-          child: const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+          fit: BoxFit.cover,
+          placeholder: (context, url) => Container(
+            width: 50,
+            height: 50,
+            color: placeholderColor,
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+          errorWidget: (context, url, error) => Container(
+            width: 50,
+            height: 50,
+            color: placeholderColor,
+            child: Icon(
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ),
-        errorWidget: (context, url, error) => Container(
-          width: 50,
-          height: 50,
-          color: placeholderColor,
-          child: Icon(
-            Icons.music_note,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
+      );
 
-    // 获取最佳歌曲用于更多菜单
+      final bestTrack = mergedTrack.getBestTrack();
+      
+      return _wrapCard(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: EdgeInsets.zero,
+        child: _buildAdaptiveListTile(
+          leading: leading,
+          title: Text(
+            mergedTrack.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            '${mergedTrack.artists} • ${mergedTrack.album}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          trailing: TrackMoreButton(
+            track: bestTrack,
+            onPlay: () => _playMergedTrack(mergedTrack),
+          ),
+          onPressed: () => _playMergedTrack(mergedTrack),
+          onLongPress: () => _showPlatformSelector(mergedTrack),
+        ),
+      );
+    }
+
+    // Material Expressive Style
+    final cs = Theme.of(context).colorScheme;
     final bestTrack = mergedTrack.getBestTrack();
     
-    final tile = _buildAdaptiveListTile(
-      leading: leading,
-      title: Text(
-        mergedTrack.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        '${mergedTrack.artists} • ${mergedTrack.album}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      trailing: TrackMoreButton(
-        track: bestTrack,
-        onPlay: () => _playMergedTrack(mergedTrack),
-      ),
-      onPressed: () => _playMergedTrack(mergedTrack),
+    return InkWell(
+      onTap: () => _playMergedTrack(mergedTrack),
       onLongPress: () => _showPlatformSelector(mergedTrack),
-    );
-
-    return _wrapCard(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: EdgeInsets.zero,
-      child: tile,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        child: Row(
+          children: [
+            // 大尺寸高圆角封面
+            Hero(
+              tag: 'search_merged_${bestTrack.id}_${bestTrack.source}',
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: CachedNetworkImage(
+                    imageUrl: mergedTrack.picUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: cs.surfaceContainerHighest,
+                      child: const Center(
+                        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: cs.surfaceContainerHighest,
+                      child: Icon(Icons.music_note, color: cs.primary.withOpacity(0.5)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // 文字内容
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    mergedTrack.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${mergedTrack.artists} · ${mergedTrack.album}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurfaceVariant.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // 操作按钮
+            TrackMoreButton(
+              track: bestTrack,
+              onPlay: () => _playMergedTrack(mergedTrack),
+              // Note: TrackMoreButton will need to be visually consistent too.
+            ),
+          ],
+        ),
+      ),
     );
   }
 

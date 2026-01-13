@@ -70,10 +70,16 @@ extension MyPageMaterialUI on _MyPageState {
           // 全局沉浸式背景
           Positioned.fill(
             child: user?.avatarUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: user!.avatarUrl!,
-                    fit: BoxFit.cover,
-                  )
+                ? (user!.avatarUrl!.contains('linux.do')
+                    ? LinuxDoAvatarMaterial(
+                        url: user.avatarUrl!,
+                        userId: user.id,
+                        size: MediaQuery.of(context).size.width,
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: user.avatarUrl!,
+                        fit: BoxFit.cover,
+                      ))
                 : Container(color: colorScheme.surface),
           ),
           Positioned.fill(
@@ -116,12 +122,22 @@ extension MyPageMaterialUI on _MyPageState {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const SizedBox(height: 48), // 为状态栏和可能的返回键留出空间
-                        CircleAvatar(
-                          radius: 50,
-                          backgroundColor: colorScheme.secondaryContainer.withOpacity(0.5),
-                          backgroundImage: user?.avatarUrl != null ? CachedNetworkImageProvider(user!.avatarUrl!) : null,
-                          child: user?.avatarUrl == null ? Text(user?.username[0].toUpperCase() ?? '?', style: TextStyle(fontSize: 32, color: colorScheme.onSecondaryContainer)) : null,
-                        ),
+                        // 用户头像
+                        if (user?.avatarUrl != null && user!.avatarUrl!.contains('linux.do'))
+                          ClipOval(
+                            child: LinuxDoAvatarMaterial(
+                              url: user.avatarUrl!,
+                              userId: user.id,
+                              size: 100,
+                            ),
+                          )
+                        else
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundColor: colorScheme.secondaryContainer.withOpacity(0.5),
+                            backgroundImage: user?.avatarUrl != null ? CachedNetworkImageProvider(user!.avatarUrl!) : null,
+                            child: user?.avatarUrl == null ? Text(user?.username[0].toUpperCase() ?? '?', style: TextStyle(fontSize: 32, color: colorScheme.onSecondaryContainer)) : null,
+                          ),
                         const SizedBox(height: 16),
                         Text(
                           user?.username ?? '未登录',
@@ -644,11 +660,21 @@ extension MyPageMaterialUI on _MyPageState {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 32,
-              backgroundImage: user.avatarUrl != null ? CachedNetworkImageProvider(user.avatarUrl!) : null,
-              child: user.avatarUrl == null ? Text(user.username[0].toUpperCase(), style: const TextStyle(fontSize: 24)) : null,
-            ),
+            // 用户头像
+            if (user.avatarUrl != null && user.avatarUrl!.contains('linux.do'))
+              ClipOval(
+                child: LinuxDoAvatarMaterial(
+                  url: user.avatarUrl!,
+                  userId: user.id,
+                  size: 64,
+                ),
+              )
+            else
+              CircleAvatar(
+                radius: 32,
+                backgroundImage: user.avatarUrl != null ? CachedNetworkImageProvider(user.avatarUrl!) : null,
+                child: user.avatarUrl == null ? Text(user.username[0].toUpperCase(), style: const TextStyle(fontSize: 24)) : null,
+              ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(

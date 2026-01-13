@@ -42,14 +42,44 @@ class MobileDailyRecommendCard extends StatelessWidget {
       );
     }
     
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      elevation: 0,
-      color: cs.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28),
+    // Android 16 Expressive Style Card
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cs.surfaceContainerHigh,
+            cs.surfaceContainerHighest.withOpacity(0.8),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: cardContent,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            if (onOpenDetail != null) {
+              onOpenDetail!();
+            } else {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => DailyRecommendDetailPage(tracks: tracks),
+                ),
+              );
+            }
+          },
+          borderRadius: BorderRadius.circular(32),
+          child: cardContent,
+        ),
+      ),
     );
   }
   
@@ -305,207 +335,69 @@ class MobileDailyRecommendCard extends StatelessWidget {
     );
   }
   
-  /// Material 风格卡片内容
+  /// Material 风格卡片内容 - Android 16 Expressive Refactor
   Widget _buildMaterialCardContent(BuildContext context, List<String> coverImages, ColorScheme cs) {
-    return InkWell(
-      onTap: () {
-        if (onOpenDetail != null) {
-          onOpenDetail!();
-        } else {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => DailyRecommendDetailPage(tracks: tracks),
-            ),
-          );
-        }
-      },
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final bool isNarrow = constraints.maxWidth < 480;
-          final EdgeInsets contentPadding = const EdgeInsets.all(16);
-          if (isNarrow) {
-            final double gridSize = (constraints.maxWidth * 0.38).clamp(120.0, 180.0);
-            return Padding(
-              padding: contentPadding,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: gridSize,
-                    height: gridSize,
-                    child: _buildCoverGrid(context, coverImages),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            '每日推荐',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: cs.primary,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '${tracks.length} 首歌曲',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: cs.onSurface.withOpacity(0.65),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Icon(Icons.auto_awesome, size: 18, color: cs.primary),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                '根据你的音乐品味每日更新',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: cs.onSurface.withOpacity(0.7),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 140),
-                            child: FilledButton.icon(
-                              onPressed: () {
-                                if (onOpenDetail != null) {
-                                  onOpenDetail!();
-                                } else {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => DailyRecommendDetailPage(tracks: tracks),
-                                    ),
-                                  );
-                                }
-                              },
-                              icon: const Icon(Icons.chevron_right, size: 20),
-                              label: const Text('查看全部'),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return Container(
-            height: 200,
-            padding: contentPadding.add(const EdgeInsets.all(4)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isNarrow = constraints.maxWidth < 480;
+        final EdgeInsets contentPadding = const EdgeInsets.symmetric(horizontal: 20, vertical: 24);
+        
+        if (isNarrow) {
+          final double gridSize = (constraints.maxWidth * 0.35).clamp(100.0, 140.0);
+          return Padding(
+            padding: contentPadding,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 SizedBox(
-                  width: 160,
-                  height: 160,
+                  width: gridSize,
+                  height: gridSize,
                   child: _buildCoverGrid(context, coverImages),
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(width: 20),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '每日推荐',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: cs.primary,
-                          ),
+                      Text(
+                        '每日推荐',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface,
+                          letterSpacing: -1,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          '${tracks.length} 首歌曲',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: cs.onSurface.withOpacity(0.6),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.auto_awesome,
-                              size: 20,
-                              color: cs.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                '根据你的音乐品味每日更新',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: cs.onSurface.withOpacity(0.7),
-                                ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.auto_awesome, size: 14, color: cs.primary),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '为您精选 ${tracks.length} 首',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: cs.primary,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 140),
-                          child: FilledButton.icon(
-                            onPressed: () {
-                              if (onOpenDetail != null) {
-                                onOpenDetail!();
-                              } else {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => DailyRecommendDetailPage(tracks: tracks),
-                                  ),
-                                );
-                              }
-                            },
-                            icon: const Icon(Icons.chevron_right, size: 20),
-                            label: const Text(
-                              '查看全部',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
+                      Text(
+                        '每日凌晨更新，遇见你的心头好',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withOpacity(0.6),
                         ),
                       ),
                     ],
@@ -514,12 +406,79 @@ class MobileDailyRecommendCard extends StatelessWidget {
               ],
             ),
           );
-        },
-      ),
+        }
+
+        return Container(
+          height: 200,
+          padding: contentPadding,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 152,
+                height: 152,
+                child: _buildCoverGrid(context, coverImages),
+              ),
+              const SizedBox(width: 32),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '每日推荐',
+                          style: TextStyle(
+                            fontSize: 34,
+                            fontWeight: FontWeight.w900,
+                            color: cs.onSurface,
+                            letterSpacing: -1.5,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Icon(
+                          Icons.auto_awesome,
+                          size: 28,
+                          color: cs.primary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '专属你的私人音乐品味，${tracks.length} 首好歌每日准时送达',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: cs.onSurface.withOpacity(0.7),
+                        height: 1.3,
+                      ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '查看全部',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: cs.primary,
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios, size: 14, color: cs.primary),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
   
-  /// 构建封面网格（2x2）
+  /// 构建封面网格 (Android 16 风格：更圆润的大圆角)
   Widget _buildCoverGrid(BuildContext context, List<String> coverImages) {
     final cs = Theme.of(context).colorScheme;
     final covers = List<String>.from(coverImages);
@@ -528,48 +487,59 @@ class MobileDailyRecommendCard extends StatelessWidget {
       covers.add('');
     }
     
-    return GridView.builder(
-      padding: EdgeInsets.zero,
-      physics: const NeverScrollableScrollPhysics(),
-      shrinkWrap: true,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 4,
-        mainAxisSpacing: 4,
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            spreadRadius: -2,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      itemCount: 4,
-      itemBuilder: (context, index) {
-        final url = covers[index];
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: url.isEmpty
-              ? Container(
-                  color: cs.surfaceContainerHighest,
-                  child: Icon(
-                    Icons.music_note,
-                    color: cs.onSurface.withOpacity(0.3),
-                  ),
-                )
-              : CachedNetworkImage(
-                  imageUrl: url,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: GridView.builder(
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          shrinkWrap: true,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 2,
+            mainAxisSpacing: 2,
+          ),
+          itemCount: 4,
+          itemBuilder: (context, index) {
+            final url = covers[index];
+            return url.isEmpty
+                ? Container(
                     color: cs.surfaceContainerHighest,
                     child: Icon(
                       Icons.music_note,
+                      size: 20,
                       color: cs.onSurface.withOpacity(0.3),
                     ),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: cs.surfaceContainerHighest,
-                    child: Icon(
-                      Icons.broken_image,
-                      color: cs.onSurface.withOpacity(0.3),
+                  )
+                : CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: cs.surfaceContainerHighest,
                     ),
-                  ),
-                ),
-        );
-      },
+                    errorWidget: (context, url, error) => Container(
+                      color: cs.surfaceContainerHighest,
+                      child: Icon(
+                        Icons.broken_image,
+                        size: 20,
+                        color: cs.onSurface.withOpacity(0.3),
+                      ),
+                    ),
+                  );
+          },
+        ),
+      ),
     );
   }
 }

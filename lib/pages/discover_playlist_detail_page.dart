@@ -156,6 +156,11 @@ class _DiscoverPlaylistDetailContentState
       return _buildCupertinoDetail(context);
     }
 
+    // 移动端 Material Design Expressive 风格
+    if (Platform.isIOS || Platform.isAndroid) {
+      return _buildMaterialExpressiveDetail(context);
+    }
+
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -1068,6 +1073,508 @@ class _DiscoverPlaylistDetailContentState
               child: const Text('确定'),
             ),
           ],
+        ),
+      );
+    }
+  }
+
+  // ============ Material Design Expressive 风格实现 ============
+
+  Widget _buildMaterialExpressiveDetail(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (_loading) {
+      return Container(
+        color: cs.surface,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null) {
+      return Container(
+        color: cs.surface,
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: cs.error),
+              const SizedBox(height: 16),
+              Text(
+                _error!,
+                style: TextStyle(color: cs.onSurface),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _load,
+                icon: const Icon(Icons.refresh),
+                label: const Text('重试'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final detail = _detail!;
+    final tracks = detail.tracks
+        .map(
+          (t) => Track(
+            id: t.id,
+            name: t.name,
+            artists: t.artists,
+            album: t.album,
+            picUrl: t.picUrl,
+            source: MusicSource.netease,
+          ),
+        )
+        .toList();
+
+    return Container(
+      color: cs.surface,
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            // 歌单头部信息
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: _buildMaterialExpressiveHeader(detail, cs, isDark),
+              ),
+            ),
+            // 歌单描述
+            if (detail.description.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      detail.description,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: cs.onSurface.withOpacity(0.7),
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // 歌曲统计栏（不包含播放按钮）
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: _buildMaterialExpressiveStatsBar(tracks.length, cs),
+              ),
+            ),
+            // 歌曲列表
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final track = tracks[index];
+                    return _buildMaterialExpressiveTrackTile(
+                      track: track,
+                      index: index,
+                      cs: cs,
+                      isDark: isDark,
+                      onTap: () => _handleMaterialTrackTap(context, index, tracks),
+                      onCoverReady: (provider) {
+                        final key = _coverKey(track);
+                        _coverProviderCache[key] = provider;
+                        PlaylistQueueService().updateCoverProvider(track, provider);
+                      },
+                    );
+                  },
+                  childCount: tracks.length,
+                ),
+              ),
+            ),
+            // 底部留白
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 100),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaterialExpressiveHeader(
+    NeteasePlaylistDetail detail,
+    ColorScheme cs,
+    bool isDark,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cs.surfaceContainerHigh,
+            cs.surfaceContainerHighest.withOpacity(0.8),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 歌单封面
+          Hero(
+            tag: 'playlist_cover_${detail.id}',
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: CachedNetworkImage(
+                  imageUrl: detail.coverImgUrl,
+                  width: 140,
+                  height: 140,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    width: 140,
+                    height: 140,
+                    color: cs.surfaceContainerHighest,
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: 140,
+                    height: 140,
+                    color: cs.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.music_note,
+                      size: 48,
+                      color: cs.onSurface.withOpacity(0.3),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+          // 歌单信息
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  detail.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSurface,
+                    letterSpacing: -0.5,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.person_outline, size: 16, color: cs.primary),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        detail.creator,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: cs.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // 标签
+                if (detail.tags.isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: detail.tags
+                        .take(3)
+                        .map(
+                          (t) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.primaryContainer,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              t,
+                              style: TextStyle(
+                                color: cs.onPrimaryContainer,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                const SizedBox(height: 16),
+                // 同步按钮
+                FilledButton.icon(
+                  onPressed: () => _syncToLocal(context, widget.playlistId),
+                  icon: const Icon(Icons.sync, size: 18),
+                  label: const Text('同步到本地'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 歌曲统计栏（不包含播放按钮）
+  Widget _buildMaterialExpressiveStatsBar(int trackCount, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.music_note,
+              size: 22,
+              color: cs.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '共 $trackCount 首歌曲',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '点击歌曲开始播放',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: cs.onSurface.withOpacity(0.6),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMaterialExpressiveTrackTile({
+    required Track track,
+    required int index,
+    required ColorScheme cs,
+    required bool isDark,
+    required VoidCallback onTap,
+    required ValueChanged<ImageProvider> onCoverReady,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // 专辑封面
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: CachedNetworkImage(
+                      imageUrl: track.picUrl,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      imageBuilder: (context, provider) {
+                        onCoverReady(provider);
+                        return Image(
+                          image: provider,
+                          width: 56,
+                          height: 56,
+                          fit: BoxFit.cover,
+                        );
+                      },
+                      placeholder: (context, url) => Container(
+                        width: 56,
+                        height: 56,
+                        color: cs.surfaceContainerHighest,
+                        child: const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 56,
+                        height: 56,
+                        color: cs.surfaceContainerHighest,
+                        child: Icon(
+                          Icons.music_note,
+                          size: 24,
+                          color: cs.onSurface.withOpacity(0.3),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                // 歌曲信息
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        track.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        track.artists,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: cs.onSurface.withOpacity(0.7),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        track.album,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withOpacity(0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleMaterialTrackTap(
+    BuildContext context,
+    int index,
+    List<Track> allTracks,
+  ) async {
+    final ok = await _checkLoginStatus();
+    if (!ok) return;
+
+    final track = allTracks[index];
+    PlaylistQueueService().setQueue(
+      allTracks,
+      index,
+      QueueSource.playlist,
+      coverProviders: _coverProviderCache,
+    );
+
+    final coverProvider = _coverProviderCache[_coverKey(track)];
+    await PlayerService().playTrack(
+      track,
+      coverProvider: coverProvider,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('正在加载：${track.name}'),
+          duration: const Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     }

@@ -41,7 +41,12 @@ class _MobileThemeColorCache {
 /// 根据设置显示不同类型的背景（自适应、纯色、图片、视频、动态）
 /// 动态模式下使用 Apple Music 风格的 Mesh Gradient 背景
 class MobilePlayerBackground extends StatefulWidget {
-  const MobilePlayerBackground({super.key});
+  final double dragOffset;
+  
+  const MobilePlayerBackground({
+    super.key,
+    this.dragOffset = 0.0,
+  });
 
   @override
   State<MobilePlayerBackground> createState() => _MobilePlayerBackgroundState();
@@ -321,11 +326,14 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
           animate: true,
         );
         
+        // 播放器背景始终保持固定模糊度
+        const double blurSigma = 30.0;
+        
         if (!addBlur) {
           return RepaintBoundary(child: meshBackground);
         }
         
-        // 流体云样式下添加模糊层
+        // 流体云样式下添加固定模糊层
         return RepaintBoundary(
           child: Stack(
             children: [
@@ -334,7 +342,7 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
               // 模糊层
               Positioned.fill(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                  filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
                   child: Container(
                     color: Colors.black.withOpacity(0.1),
                   ),
@@ -422,10 +430,10 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
                       ),
                     ),
                   
-                  // 整体模糊层
+                  // 整体模糊层 (始终保持固定模糊度)
                   Positioned.fill(
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                      filter: ImageFilter.blur(sigmaX: 30.0, sigmaY: 30.0),
                       child: Container(
                         color: Colors.black.withOpacity(0.1),
                       ),

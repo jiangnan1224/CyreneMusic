@@ -321,18 +321,9 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
     return MobilePlayerFluidCloudLayout(
       lyrics: _lyrics,
       currentLyricIndex: _currentLyricIndex,
-      showTranslation: _showTranslation && _shouldShowTranslationButton(),
+      showTranslation: true,
       onBackPressed: () => Navigator.pop(context),
       onPlaylistPressed: () => MobilePlayerDialogs.showPlaylistBottomSheet(context),
-      onTranslationToggle: () {
-        setState(() => _showTranslation = !_showTranslation);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_showTranslation ? '已显示译文' : '已隐藏译文'),
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      },
     );
   }
 
@@ -356,7 +347,7 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
       return AnnotatedRegion<SystemUiOverlayStyle>(
         value: playerOverlayStyle,
         child: Scaffold(
-          backgroundColor: Colors.black,
+          backgroundColor: Colors.transparent,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
@@ -381,26 +372,23 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
     final scaffoldWidget = AnnotatedRegion<SystemUiOverlayStyle>(
       value: playerOverlayStyle,
       child: Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.transparent,
       body: Stack(
             children: [
-              // 背景层
-          const MobilePlayerBackground(),
-              
-              // 内容层
-          SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-                        final showCover = !backgroundService.enableGradient || 
-                                        backgroundService.backgroundType != PlayerBackgroundType.adaptive;
-                        
-                        // 流体云布局（动态背景模式 或 歌词样式为流体云）
-                        if (useFluidCloudLayout) {
-                          return _buildAppleMusicStyleLayout(context, constraints);
-                        }
-                        
-                        // 原有布局
-                          return Column(
+              // 流体云布局模式：完全接管背景和 Safe Area
+              if (useFluidCloudLayout)
+                _buildAppleMusicStyleLayout(context, const BoxConstraints())
+              else ...[
+                // 标准布局模式：原有背景 + Safe Area
+                const MobilePlayerBackground(),
+                SafeArea(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final showCover = !backgroundService.enableGradient || 
+                                      backgroundService.backgroundType != PlayerBackgroundType.adaptive;
+                      
+                      // 原有布局
+                      return Column(
                             children: [
                     // 顶部栏
                     MobilePlayerAppBar(
@@ -433,7 +421,7 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
                                       builder: (context) => const MobileLyricPage(),
                                     ),
                                   ),
-                                  showTranslation: _showTranslation && _shouldShowTranslationButton(),
+                                  showTranslation: true,
                                 ),
                               ),
                             ),
@@ -451,52 +439,15 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
                           onVolumeControlPressed: _toggleControlCenter,
                           onAddToPlaylistPressed: (track) => MobilePlayerDialogs.showAddToPlaylist(context, track),
                         ),
-                        if (_shouldShowTranslationButton())
-                          Positioned(
-                          left: 12,
-                          bottom: 12,
-                          child: Tooltip(
-                            message: _showTranslation ? '隐藏译文' : '显示译文',
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(6),
-                              onTap: () {
-                                setState(() => _showTranslation = !_showTranslation);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(_showTranslation ? '已显示译文' : '已隐藏译文'),
-                                    duration: const Duration(seconds: 1),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                width: 30,
-                                height: 30,
-                                decoration: BoxDecoration(
-                                  color: _showTranslation ? Colors.white.withOpacity(0.2) : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Center(
-                                  child: Text(
-                                    '译',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'Microsoft YaHei',
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+
                       ],
                     ),
               ],
-            );
-          },
-            ),
-          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
 
           // 控制中心面板
           MobilePlayerControlCenter(

@@ -99,7 +99,9 @@ extension MyPageCupertinoUI on _MyPageState {
             width: 60, height: 60,
             decoration: BoxDecoration(shape: BoxShape.circle, color: CupertinoColors.systemBlue.withOpacity(0.1)),
             child: user.avatarUrl != null
-                ? ClipOval(child: CachedNetworkImage(imageUrl: user.avatarUrl!, fit: BoxFit.cover, placeholder: (_, __) => const CupertinoActivityIndicator(), errorWidget: (_, __, ___) => Text(user.username[0].toUpperCase(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold))))
+                ? (user.avatarUrl!.contains('linux.do')
+                    ? ClipOval(child: LinuxDoAvatarMaterial(url: user.avatarUrl!, userId: user.id, size: 60))
+                    : ClipOval(child: CachedNetworkImage(imageUrl: user.avatarUrl!, fit: BoxFit.cover, placeholder: (_, __) => const CupertinoActivityIndicator(), errorWidget: (_, __, ___) => Text(user.username[0].toUpperCase(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)))))
                 : Center(child: Text(user.username[0].toUpperCase(), style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: CupertinoColors.systemBlue))),
           ),
           const SizedBox(width: 16),

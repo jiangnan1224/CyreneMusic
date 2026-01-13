@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -10,6 +11,7 @@ import '../../services/listening_stats_service.dart';
 import '../../services/player_service.dart';
 import '../../services/playlist_queue_service.dart';
 import '../../services/track_source_switch_service.dart';
+import '../../services/avatar_fetch_service.dart';
 import '../../models/playlist.dart';
 import '../../models/track.dart';
 import '../../widgets/import_playlist_dialog.dart';
@@ -926,5 +928,115 @@ class _MyPageState extends State<MyPage> {
       _isEditMode = false;
       _selectedTrackIds.clear();
     });
+  }
+}
+
+/// Linux Do 头像组件 - Material 版本
+/// 
+/// 使用 WebView 服务获取头像，绕过 Cloudflare 保护
+class LinuxDoAvatarMaterial extends StatefulWidget {
+  final String url;
+  final int userId;
+  final double size;
+  final Widget? placeholder;
+  final Widget? errorWidget;
+
+  const LinuxDoAvatarMaterial({
+    super.key,
+    required this.url,
+    required this.userId,
+    this.size = 60,
+    this.placeholder,
+    this.errorWidget,
+  });
+
+  @override
+  State<LinuxDoAvatarMaterial> createState() => _LinuxDoAvatarMaterialState();
+}
+
+class _LinuxDoAvatarMaterialState extends State<LinuxDoAvatarMaterial> {
+  Uint8List? _avatarData;
+  bool _isLoading = true;
+  bool _hasFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAvatar();
+  }
+
+  @override
+  void didUpdateWidget(LinuxDoAvatarMaterial oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _loadAvatar();
+    }
+  }
+
+  Future<void> _loadAvatar() async {
+    setState(() {
+      _isLoading = true;
+      _hasFailed = false;
+    });
+
+    try {
+      final data = await AvatarFetchService().fetchAvatar(
+        widget.url,
+        cacheKey: 'linuxdo_${widget.userId}',
+      );
+
+      if (mounted) {
+        setState(() {
+          _avatarData = data;
+          _isLoading = false;
+          _hasFailed = data == null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasFailed = true;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return widget.placeholder ?? 
+        SizedBox(
+          width: widget.size,
+          height: widget.size,
+          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        );
+    }
+
+    if (_hasFailed || _avatarData == null) {
+      return widget.errorWidget ?? 
+        Container(
+          width: widget.size,
+          height: widget.size,
+          color: Theme.of(context).colorScheme.primaryContainer,
+          child: Icon(Icons.person, size: widget.size * 0.5),
+        );
+    }
+
+    return Image.memory(
+      _avatarData!,
+      width: widget.size,
+      height: widget.size,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return widget.errorWidget ?? 
+          Container(
+            width: widget.size,
+            height: widget.size,
+            color: Theme.of(context).colorScheme.primaryContainer,
+            child: Icon(Icons.person, size: widget.size * 0.5),
+          );
+      },
+    );
   }
 }

@@ -36,6 +36,15 @@ class MobilePlayerSettingsSheet extends StatefulWidget {
 class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    // Material You 主题色
+    final surfaceColor = colorScheme.surfaceContainerHigh;
+    final onSurfaceColor = colorScheme.onSurface;
+    final dividerColor = colorScheme.outlineVariant;
+    final handleColor = colorScheme.outline;
+    
     return DraggableScrollableSheet(
       initialChildSize: 0.55,
       minChildSize: 0.3,
@@ -44,7 +53,7 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
       builder: (context, scrollController) {
         return Container(
           decoration: BoxDecoration(
-            color: Colors.grey[900],
+            color: surfaceColor,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
@@ -55,7 +64,7 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
                 height: 4,
                 margin: const EdgeInsets.only(top: 12, bottom: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white30,
+                  color: handleColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -65,26 +74,26 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
-                    const Icon(Icons.tune_rounded, color: Colors.white, size: 24),
+                    Icon(Icons.tune_rounded, color: colorScheme.primary, size: 24),
                     const SizedBox(width: 12),
-                    const Text(
+                    Text(
                       '播放器设置',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: onSurfaceColor,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const Spacer(),
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
+                      icon: Icon(Icons.close, color: colorScheme.onSurfaceVariant),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
               ),
               
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: dividerColor, height: 1),
               
               // 设置列表
               Expanded(
@@ -133,6 +142,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
 
   /// 构建播放顺序设置区域
   Widget _buildPlaybackModeSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return AnimatedBuilder(
       animation: PlaybackModeService(),
       builder: (context, _) {
@@ -144,10 +155,10 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '播放顺序',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: colorScheme.onSurfaceVariant,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -191,16 +202,20 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.05),
+            color: isSelected 
+                ? colorScheme.primaryContainer 
+                : colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected ? Colors.white.withOpacity(0.3) : Colors.transparent,
+              color: isSelected ? colorScheme.primary : Colors.transparent,
               width: 1,
             ),
           ),
@@ -208,14 +223,14 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
             children: [
               Icon(
                 icon,
-                color: isSelected ? Colors.white : Colors.white60,
+                color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
                 size: 24,
               ),
               const SizedBox(height: 4),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white60,
+                  color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
                   fontSize: 12,
                 ),
               ),
@@ -228,6 +243,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
 
   /// 构建播放器样式设置区域
   Widget _buildPlayerStyleSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return AnimatedBuilder(
       animation: LyricStyleService(),
       builder: (context, _) {
@@ -239,10 +256,10 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '播放器样式',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: colorScheme.onSurfaceVariant,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -271,10 +288,10 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
               const SizedBox(height: 16),
               
               // 歌词对齐设置
-              const Text(
+              Text(
                 '歌词对齐',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: colorScheme.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
@@ -306,6 +323,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
 
   /// 构建歌词细节设置区域 (字号和模糊行数)
   Widget _buildLyricDetailedSettingsSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return AnimatedBuilder(
       animation: LyricStyleService(),
       builder: (context, _) {
@@ -316,10 +335,10 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '歌词细节',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: colorScheme.onSurfaceVariant,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -329,7 +348,7 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -337,25 +356,25 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
                     // 字号调节
                     Row(
                       children: [
-                        const Icon(Icons.format_size_rounded, color: Colors.white60, size: 18),
+                        Icon(Icons.format_size_rounded, color: colorScheme.primary, size: 18),
                         const SizedBox(width: 10),
-                        const Text(
+                        Text(
                           '歌词字号',
-                          style: TextStyle(color: Colors.white, fontSize: 13),
+                          style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
                         ),
                         const Spacer(),
                         Text(
                           '${styleService.fontSize.toInt()} px',
-                          style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: colorScheme.primary, fontSize: 13, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                     SliderTheme(
                       data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: Colors.white,
-                        inactiveTrackColor: Colors.white24,
-                        thumbColor: Colors.white,
-                        overlayColor: Colors.white24,
+                        activeTrackColor: colorScheme.primary,
+                        inactiveTrackColor: colorScheme.surfaceContainerHigh,
+                        thumbColor: colorScheme.primary,
+                        overlayColor: colorScheme.primary.withOpacity(0.12),
                         trackHeight: 4,
                       ),
                       child: Slider(
@@ -372,25 +391,25 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
                     // 渐隐范围
                     Row(
                       children: [
-                        const Icon(Icons.blur_linear_rounded, color: Colors.white60, size: 18),
+                        Icon(Icons.blur_linear_rounded, color: colorScheme.secondary, size: 18),
                         const SizedBox(width: 10),
-                        const Text(
+                        Text(
                           '视觉模糊强度',
-                          style: TextStyle(color: Colors.white, fontSize: 13),
+                          style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
                         ),
                         const Spacer(),
                         Text(
                           '${styleService.blurSigma.toStringAsFixed(1)}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: colorScheme.secondary, fontSize: 13, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                     SliderTheme(
                       data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: Colors.white,
-                        inactiveTrackColor: Colors.white24,
-                        thumbColor: Colors.white,
-                        overlayColor: Colors.white24,
+                        activeTrackColor: colorScheme.secondary,
+                        inactiveTrackColor: colorScheme.surfaceContainerHigh,
+                        thumbColor: colorScheme.secondary,
+                        overlayColor: colorScheme.secondary.withOpacity(0.12),
                         trackHeight: 4,
                       ),
                       child: Slider(
@@ -404,25 +423,25 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
 
                     const SizedBox(height: 8),
 
-                    // 移除过时的第三个滑块或替换为间距调节
+                    // 行间距调节
                     Row(
                       children: [
-                        const Icon(Icons.format_line_spacing_rounded, color: Colors.white60, size: 18),
+                        Icon(Icons.format_line_spacing_rounded, color: colorScheme.tertiary, size: 18),
                         const SizedBox(width: 10),
-                        const Text(
+                        Text(
                           '歌词行间距',
-                          style: TextStyle(color: Colors.white, fontSize: 13),
+                          style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
                         ),
                         const Spacer(),
                         if (styleService.autoLineHeight)
-                          const Text(
+                          Text(
                              '自动',
-                             style: TextStyle(color: Colors.cyan, fontSize: 12, fontWeight: FontWeight.bold),
+                             style: TextStyle(color: colorScheme.tertiary, fontSize: 12, fontWeight: FontWeight.bold),
                           )
                         else
                           Text(
                             '${styleService.lineHeight.toInt()} px',
-                            style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: colorScheme.tertiary, fontSize: 13, fontWeight: FontWeight.bold),
                           ),
                         const SizedBox(width: 8),
                         GestureDetector(
@@ -430,16 +449,16 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
                           child: Icon(
                             styleService.autoLineHeight ? Icons.auto_awesome_rounded : Icons.edit_note_rounded,
                             size: 16,
-                            color: styleService.autoLineHeight ? Colors.cyan : Colors.white38,
+                            color: styleService.autoLineHeight ? colorScheme.tertiary : colorScheme.outline,
                           ),
                         ),
                       ],
                     ),
                     SliderTheme(
                       data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: styleService.autoLineHeight ? Colors.white38 : Colors.white,
-                        inactiveTrackColor: Colors.white24,
-                        thumbColor: styleService.autoLineHeight ? Colors.white38 : Colors.white,
+                        activeTrackColor: styleService.autoLineHeight ? colorScheme.outline : colorScheme.tertiary,
+                        inactiveTrackColor: colorScheme.surfaceContainerHigh,
+                        thumbColor: styleService.autoLineHeight ? colorScheme.outline : colorScheme.tertiary,
                         trackHeight: 4,
                       ),
                       child: Slider(
@@ -467,16 +486,20 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.05),
+            color: isSelected 
+                ? colorScheme.primaryContainer 
+                : colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected ? Colors.white.withOpacity(0.3) : Colors.transparent,
+              color: isSelected ? colorScheme.primary : Colors.transparent,
               width: 1,
             ),
           ),
@@ -485,14 +508,14 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
             children: [
               Icon(
                 icon,
-                color: isSelected ? Colors.white : Colors.white60,
+                color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
                 size: 28,
               ),
               const SizedBox(height: 8),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white60,
+                  color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -501,7 +524,7 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
               Text(
                 description,
                 style: TextStyle(
-                  color: isSelected ? Colors.white54 : Colors.white38,
+                  color: isSelected ? colorScheme.onPrimaryContainer.withOpacity(0.7) : colorScheme.onSurfaceVariant,
                   fontSize: 11,
                 ),
               ),
@@ -519,16 +542,20 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.05),
+            color: isSelected 
+                ? colorScheme.secondaryContainer 
+                : colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? Colors.white.withOpacity(0.3) : Colors.transparent,
+              color: isSelected ? colorScheme.secondary : Colors.transparent,
               width: 1,
             ),
           ),
@@ -537,14 +564,14 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
             children: [
               Icon(
                 icon,
-                color: isSelected ? Colors.white : Colors.white60,
+                color: isSelected ? colorScheme.onSecondaryContainer : colorScheme.onSurfaceVariant,
                 size: 18,
               ),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white60,
+                  color: isSelected ? colorScheme.onSecondaryContainer : colorScheme.onSurfaceVariant,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
@@ -558,6 +585,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
 
   /// 构建背景设置区域
   Widget _buildBackgroundSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return AnimatedBuilder(
       animation: PlayerBackgroundService(),
       builder: (context, _) {
@@ -570,10 +599,10 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '播放器背景',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: colorScheme.onSurfaceVariant,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -690,6 +719,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
 
   /// 构建纯色选择器
   Widget _buildSolidColorPicker(PlayerBackgroundService bgService) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     final presetColors = [
       Colors.grey[900]!,
       Colors.black,
@@ -704,10 +735,10 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '选择颜色',
           style: TextStyle(
-            color: Colors.white54,
+            color: colorScheme.onSurfaceVariant,
             fontSize: 12,
           ),
         ),
@@ -732,7 +763,7 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: color == bgService.solidColor
-                            ? Colors.white
+                            ? colorScheme.primary
                             : Colors.transparent,
                         width: 2,
                       ),
@@ -764,13 +795,15 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
 
   /// 显示自定义颜色选择器
   Future<void> _showCustomColorPicker(PlayerBackgroundService bgService) async {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     Color pickerColor = bgService.solidColor;
     
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text('自定义颜色', style: TextStyle(color: Colors.white)),
+        backgroundColor: colorScheme.surface,
+        title: Text('自定义颜色', style: TextStyle(color: colorScheme.onSurface)),
         content: SingleChildScrollView(
           child: ColorPicker(
             pickerColor: pickerColor,
@@ -808,6 +841,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
 
   /// 构建图片/视频背景设置
   Widget _buildMediaBackgroundSettings(PlayerBackgroundService bgService, PlayerBackgroundType currentType) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     final isVideo = currentType == PlayerBackgroundType.video;
     
     return Column(
@@ -819,13 +854,13 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () => _selectBackgroundMedia(bgService, isVideo),
-                icon: Icon(isVideo ? Icons.video_library : Icons.image, color: Colors.white70, size: 18),
+                icon: Icon(isVideo ? Icons.video_library : Icons.image, color: colorScheme.primary, size: 18),
                 label: Text(
                   isVideo ? '选择视频' : '选择图片',
-                  style: const TextStyle(color: Colors.white70),
+                  style: TextStyle(color: colorScheme.primary),
                 ),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white24),
+                  side: BorderSide(color: colorScheme.outline),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
@@ -837,7 +872,7 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
                   await bgService.clearMediaBackground();
                   setState(() {});
                 },
-                icon: const Icon(Icons.clear, color: Colors.white54),
+                icon: Icon(Icons.clear, color: colorScheme.error),
                 tooltip: '清除${isVideo ? '视频' : '图片'}',
               ),
             ],
@@ -849,23 +884,23 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
         // 模糊程度调节
         Row(
           children: [
-            const Text(
+            Text(
               '模糊程度',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
             ),
             const SizedBox(width: 8),
             Text(
               '${bgService.blurAmount.toInt()}',
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              style: TextStyle(color: colorScheme.primary, fontSize: 12, fontWeight: FontWeight.bold),
             ),
           ],
         ),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            activeTrackColor: Colors.white,
-            inactiveTrackColor: Colors.white24,
-            thumbColor: Colors.white,
-            overlayColor: Colors.white24,
+            activeTrackColor: colorScheme.primary,
+            inactiveTrackColor: colorScheme.surfaceContainerHigh,
+            thumbColor: colorScheme.primary,
+            overlayColor: colorScheme.primary.withOpacity(0.12),
           ),
           child: Slider(
             value: bgService.blurAmount,
@@ -878,9 +913,9 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
             },
           ),
         ),
-        const Text(
+        Text(
           '0 = 清晰，50 = 最模糊',
-          style: TextStyle(color: Colors.white38, fontSize: 11),
+          style: TextStyle(color: colorScheme.outline, fontSize: 11),
         ),
       ],
     );
@@ -920,17 +955,19 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
     required VoidCallback onTap,
     bool isDisabled = false,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected 
-              ? Colors.white.withAlpha(38) 
-              : Colors.white.withAlpha(13),
+              ? colorScheme.primaryContainer 
+              : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? Colors.white.withAlpha(77) : Colors.transparent,
+            color: isSelected ? colorScheme.primary : Colors.transparent,
             width: 1,
           ),
         ),
@@ -940,8 +977,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
             Icon(
               icon,
               color: isDisabled 
-                  ? Colors.white38 
-                  : (isSelected ? Colors.white : Colors.white60),
+                  ? colorScheme.outline 
+                  : (isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant),
               size: 18,
             ),
             const SizedBox(width: 6),
@@ -949,8 +986,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
               label,
               style: TextStyle(
                 color: isDisabled 
-                    ? Colors.white38 
-                    : (isSelected ? Colors.white : Colors.white60),
+                    ? colorScheme.outline 
+                    : (isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant),
                 fontSize: 13,
               ),
             ),
@@ -962,6 +999,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
 
   /// 构建睡眠定时器区域
   Widget _buildSleepTimerSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return AnimatedBuilder(
       animation: SleepTimerService(),
       builder: (context, _) {
@@ -974,10 +1013,10 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
             children: [
               Row(
                 children: [
-                  const Text(
+                  Text(
                     '睡眠定时器',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: colorScheme.onSurfaceVariant,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -1019,8 +1058,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('延长15分钟'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white70,
-                          side: const BorderSide(color: Colors.white24),
+                          foregroundColor: colorScheme.primary,
+                          side: BorderSide(color: colorScheme.outline),
                         ),
                       ),
                     ),
@@ -1036,8 +1075,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
                         icon: const Icon(Icons.close, size: 18),
                         label: const Text('取消'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
+                          foregroundColor: colorScheme.error,
+                          side: BorderSide(color: colorScheme.error),
                         ),
                       ),
                     ),
@@ -1059,13 +1098,13 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
+                          color: colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           '$minutes分钟',
-                          style: const TextStyle(
-                            color: Colors.white70,
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
                             fontSize: 13,
                           ),
                         ),
@@ -1081,6 +1120,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
   }
   /// 构建自动折叠设置区域
   Widget _buildAutoCollapseSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return AnimatedBuilder(
       animation: AutoCollapseService(),
       builder: (context, _) {
@@ -1090,10 +1131,10 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '交互体验',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: colorScheme.onSurfaceVariant,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -1102,18 +1143,18 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet> {
               SwitchListTile(
                 value: service.isAutoCollapseEnabled,
                 onChanged: (value) => service.setAutoCollapseEnabled(value),
-                title: const Text(
+                title: Text(
                   '沉浸模式 (自动折叠控制栏)',
-                  style: TextStyle(color: Colors.white, fontSize: 14),
+                  style: TextStyle(color: colorScheme.onSurface, fontSize: 14),
                 ),
-                subtitle: const Text(
+                subtitle: Text(
                   '播放时自动隐藏控制按钮，点击屏幕呼出',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
                 ),
-                activeColor: Colors.white,
-                activeTrackColor: Colors.white24,
-                inactiveThumbColor: Colors.white54,
-                inactiveTrackColor: Colors.white10,
+                activeColor: colorScheme.primary,
+                activeTrackColor: colorScheme.primaryContainer,
+                inactiveThumbColor: colorScheme.outline,
+                inactiveTrackColor: colorScheme.surfaceContainerHighest,
                 contentPadding: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),

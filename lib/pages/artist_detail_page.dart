@@ -94,6 +94,9 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
       appBar: AppBar(
         title: const Text('歌手详情'),
         backgroundColor: cs.surface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
       ),
       body: ArtistDetailContent(artistId: widget.artistId),
     );
@@ -438,6 +441,97 @@ class _SongsListView extends StatelessWidget {
         final trailing = isFluent
             ? const fluent.Icon(fluent.FluentIcons.play)
             : const Icon(Icons.play_arrow);
+
+        final isExpressive = !isFluent && !isCupertino && (Platform.isAndroid || Platform.isIOS);
+        if (isExpressive) {
+          final cs = Theme.of(context).colorScheme;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => PlayerService().playTrack(track),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: CachedNetworkImage(
+                              imageUrl: track.picUrl,
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                width: 56,
+                                height: 56,
+                                color: cs.surfaceContainerHighest,
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                track.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSurface,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${track.artists} • ${track.album}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: cs.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
 
         return _buildAdaptiveCard(
           isFluent: isFluent,
@@ -965,6 +1059,32 @@ class _AlbumsThumbView extends StatelessWidget {
             }
           }
 
+          final isExpressive = !isFluent && !isCupertino && (Platform.isAndroid || Platform.isIOS);
+          if (isExpressive) {
+            final cs = Theme.of(context).colorScheme;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: handleTap,
+                    borderRadius: BorderRadius.circular(24),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: cardContent,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+
           return ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 260, maxWidth: 440),
             child: isFluent
@@ -1002,6 +1122,7 @@ class _ArtistDetailContentState extends State<ArtistDetailContent> {
   String? _error;
   int _tabIndex = 0; // 0: 歌曲, 1: 专辑
   bool _useGrid = false; // false: 列表, true: 缩略图
+  bool _descExpanded = false; // 歌手简介是否展开
 
   @override
   void initState() {
@@ -1099,19 +1220,120 @@ class _ArtistDetailContentState extends State<ArtistDetailContent> {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                artist['briefDesc']?.toString() ?? artist['description']?.toString() ?? '', 
-                maxLines: 2, 
-                overflow: TextOverflow.ellipsis,
-                style: isCupertino
-                    ? TextStyle(fontSize: 14, color: CupertinoColors.systemGrey)
-                    : null,
+              GestureDetector(
+                onTap: () => setState(() => _descExpanded = !_descExpanded),
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  alignment: Alignment.topLeft,
+                  child: Text(
+                    artist['briefDesc']?.toString() ?? artist['description']?.toString() ?? '', 
+                    maxLines: _descExpanded ? null : 2, 
+                    overflow: _descExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                    style: isCupertino
+                        ? TextStyle(fontSize: 14, color: CupertinoColors.systemGrey)
+                        : null,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  onTap: () => setState(() => _descExpanded = !_descExpanded),
+                  child: Text(
+                    _descExpanded ? '收起' : '展开',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
         ),
       ],
     );
+
+    final isExpressive = !isFluent && !isCupertino && (Platform.isAndroid || Platform.isIOS);
+    
+    if (isExpressive) {
+      final cs = Theme.of(context).colorScheme;
+      final bottomPadding = MediaQuery.of(context).padding.bottom + 100;
+      
+      return CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          // Expressive Header
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: headerContent,
+              ),
+            ),
+          ),
+          
+          // Expressive Tabs
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+              child: _ArtistExpressiveTabs(
+                tabs: const ['歌曲', '专辑'],
+                currentIndex: _tabIndex,
+                onChanged: (i) => setState(() => _tabIndex = i),
+              ),
+            ),
+          ),
+          
+          // 内容列表
+          SliverPadding(
+            padding: EdgeInsets.only(left: 16, right: 16, bottom: bottomPadding),
+            sliver: _tabIndex == 0
+                ? SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final m = songs[index] as Map<String, dynamic>;
+                        final track = Track(
+                          id: m['id'],
+                          name: m['name']?.toString() ?? '',
+                          artists: m['artists']?.toString() ?? '',
+                          album: m['album']?.toString() ?? '',
+                          picUrl: m['picUrl']?.toString() ?? '',
+                          source: MusicSource.netease,
+                        );
+                        return _buildExpressiveSongTile(context, track, cs);
+                      },
+                      childCount: songs.length,
+                    ),
+                  )
+                : SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final a = albums[index] as Map<String, dynamic>;
+                        return _buildExpressiveAlbumTile(context, a, cs, widget.onOpenAlbum);
+                      },
+                      childCount: albums.length,
+                    ),
+                  ),
+          ),
+        ],
+      );
+    }
 
     return Column(
       children: [
@@ -1269,3 +1491,269 @@ class _ArtistDetailContentState extends State<ArtistDetailContent> {
 }
 
 
+  Widget _buildExpressiveSongTile(BuildContext context, Track track, ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => PlayerService().playTrack(track),
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: CachedNetworkImage(
+                        imageUrl: track.picUrl,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          width: 56,
+                          height: 56,
+                          color: cs.surfaceContainerHighest,
+                          child: const Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          track.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${track.artists} • ${track.album}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpressiveAlbumTile(BuildContext context, Map<String, dynamic> a, ColorScheme cs, void Function(int)? onOpenAlbum) {
+    final albumId = a['id'];
+    final albumName = a['name']?.toString() ?? '';
+    final picUrl = (a['picUrl'] ?? a['coverImgUrl'] ?? '')?.toString() ?? '';
+    
+    // 安全获取歌手名
+    String artistName = '';
+    final artistData = a['artist'];
+    if (artistData is Map) {
+      artistName = artistData['name']?.toString() ?? '';
+    } else if (artistData is List && artistData.isNotEmpty) {
+      final firstArtist = artistData[0];
+      artistName = (firstArtist is Map ? firstArtist['name'] : firstArtist)?.toString() ?? '';
+    } else if (artistData != null) {
+      artistName = artistData.toString();
+    }
+
+    // 安全获取发布时间
+    String publishTime = '';
+    final pt = a['publishTime'];
+    if (pt != null) {
+      if (pt is num) {
+        publishTime = DateTime.fromMillisecondsSinceEpoch(pt.toInt()).year.toString();
+      } else {
+        publishTime = pt.toString();
+      }
+    }
+
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              if (albumId != null) {
+                onOpenAlbum?.call(albumId);
+              }
+            },
+            borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: CachedNetworkImage(
+                      imageUrl: picUrl,
+                      width: 80,
+                      height: 80,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          albumName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '$artistName • $publishTime',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+/// 歌手详情页 Material Expressive 风格的 Tabs
+class _ArtistExpressiveTabs extends StatelessWidget {
+  final List<String> tabs;
+  final int currentIndex;
+  final ValueChanged<int> onChanged;
+
+  const _ArtistExpressiveTabs({
+    required this.tabs,
+    required this.currentIndex,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final count = tabs.length;
+        if (count == 0) return const SizedBox.shrink();
+        
+        final totalWidth = constraints.maxWidth;
+        final tabWidth = totalWidth / count;
+        const height = 56.0;
+
+        return SizedBox(
+          height: height,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // 底部指示器
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.fastOutSlowIn,
+                bottom: 4,
+                left: currentIndex * tabWidth + (tabWidth - 28) / 2,
+                width: 28,
+                height: 4,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Tab 标签
+              Row(
+                children: List.generate(count, (i) {
+                  final selected = i == currentIndex;
+                  
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => onChanged(i),
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
+                          style: TextStyle(
+                            color: selected 
+                                ? (isDark ? Colors.white : Colors.black87) 
+                                : cs.onSurface.withOpacity(0.5),
+                            fontSize: selected ? 19 : 15,
+                            fontWeight: selected ? FontWeight.w900 : FontWeight.w600,
+                            letterSpacing: selected ? -0.2 : 0,
+                          ),
+                          child: Text(tabs[i]),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}

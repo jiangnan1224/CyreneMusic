@@ -8,6 +8,24 @@ import '../../services/lyric_font_service.dart';
 import '../../services/lyric_style_service.dart';
 import '../../models/lyric_line.dart';
 
+/// 虚拟项类型：歌词或占位点
+enum _VirtualEntryType { lyric, dots }
+
+/// 虚拟歌词项 - 用于统一管理歌词和占位点
+class _VirtualLyricEntry {
+  final _VirtualEntryType type;
+  final int? lyricIndex; 
+  final Duration startTime;
+  final String key;
+
+  _VirtualLyricEntry({
+    required this.type,
+    this.lyricIndex,
+    required this.startTime,
+    required this.key,
+  });
+}
+
 /// 移动端流体云歌词面板 - 由桌面端 PlayerFluidCloudLyricsPanel 复制而来，用于独立适配
 class MobilePlayerFluidCloudLyricsPanel extends StatefulWidget {
   final List<LyricLine> lyrics;
@@ -44,14 +62,22 @@ class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidClo
   double? _lastViewportWidth;
   String? _lastFontFamily;
   bool? _lastShowTranslation;
+
+  // Ticker 用于跟踪播放位置（动态触发占位符）
+  late Ticker _ticker;
   
   @override
   void initState() {
     super.initState();
+    _ticker = createTicker((_) {
+      if (mounted) setState(() {});
+    });
+    _ticker.start();
   }
 
   @override
   void dispose() {
+    _ticker.dispose();
     _dragResetTimer?.cancel();
     super.dispose();
   }
@@ -94,6 +120,7 @@ class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidClo
           builder: (context, constraints) {
             final viewportHeight = constraints.maxHeight;
             final viewportWidth = constraints.maxWidth;
+            final currentPos = PlayerService().position;
             
             // 🔧 关键修复：为了应对活跃行 1.15x 的放大，基础布局宽度需要收缩
             // 使得 基础宽度 * 1.15 = 视口宽度
@@ -107,31 +134,87 @@ class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidClo
             final centerY = styleService.currentAlignment == LyricAlignment.center 
                 ? viewportHeight * 0.5 
                 : viewportHeight * 0.25;
-            
-            final visibleBuffer = 6; 
-            final visibleLines = (viewportHeight / baseLineHeight).ceil();
-            final minIndex = max(0, widget.currentLyricIndex - visibleBuffer - (visibleLines ~/ 2));
-            final maxIndex = min(widget.lyrics.length - 1, widget.currentLyricIndex + visibleBuffer + (visibleLines ~/ 2));
 
-            final Map<int, double> heights = {};
+            // 1. 构建虚拟项列表 (动态触发)
+            final List<_VirtualLyricEntry> virtualEntries = [];
             
-            for (int i = minIndex; i <= maxIndex; i++) {
-              heights[i] = _measureLyricItemHeight(i, textMaxWidth, baseLineHeight);
+            // 检查前奏 dots：只有在距离第一句歌词开始 <= 5s 时才真正"加载"进入队列
+            if (widget.lyrics.isNotEmpty) {
+              final firstTime = widget.lyrics[0].startTime;
+              final timeToFirst = (firstTime - currentPos).inSeconds;
+              // 如果距离首句还早（>5s），则不加载 dots 项。
+              // 如果进入了 5s 倒计时，或者已经超过首句（用于支持 passed dots 的停留），则加载。
+              if (timeToFirst <= 5) {
+                 virtualEntries.add(_VirtualLyricEntry(
+                   type: _VirtualEntryType.dots,
+                   startTime: Duration.zero,
+                   key: 'dots-intro',
+                 ));
+              }
+            }
+
+            for (int i = 0; i < widget.lyrics.length; i++) {
+              virtualEntries.add(_VirtualLyricEntry(
+                type: _VirtualEntryType.lyric,
+                lyricIndex: i,
+                startTime: widget.lyrics[i].startTime,
+                key: 'lyric-$i-${widget.lyrics[i].startTime.inMilliseconds}',
+              ));
+
+              // 检查间奏 dots：同样是动态触发
+              if (i < widget.lyrics.length - 1) {
+                final currentLine = widget.lyrics[i];
+                final nextLine = widget.lyrics[i+1];
+                final gap = (nextLine.startTime - currentLine.startTime).inSeconds;
+                
+                // 计算当前行结束时间
+                Duration lineEndTime = currentLine.startTime + const Duration(seconds: 3); // 默认兜底 3s
+                if (currentLine.words != null && currentLine.words!.isNotEmpty) {
+                  lineEndTime = currentLine.words!.last.startTime + currentLine.words!.last.duration;
+                } else if (currentLine.lineDuration != null) {
+                   lineEndTime = currentLine.startTime + currentLine.lineDuration!;
+                }
+
+                // 只有当播放进度已经到达或超过当前句子的"结束点"，且间奏够长，才插入 dots 项
+                if (gap >= 10 && currentPos >= lineEndTime) {
+                  virtualEntries.add(_VirtualLyricEntry(
+                    type: _VirtualEntryType.dots,
+                    startTime: lineEndTime,
+                    key: 'dots-interlude-$i',
+                  ));
+                }
+              }
+            }
+
+            // 2. 找到当前活跃虚拟项索引
+            int activeVirtualIndex = 0;
+            for (int i = virtualEntries.length - 1; i >= 0; i--) {
+              if (currentPos >= virtualEntries[i].startTime) {
+                activeVirtualIndex = i;
+                break;
+              }
+            }
+
+            // 可视区域计算
+            final visibleBuffer = 8; 
+            final minIdx = max(0, activeVirtualIndex - visibleBuffer);
+            final maxIdx = min(virtualEntries.length - 1, activeVirtualIndex + visibleBuffer + 4);
+
+            // 3. 计算高度和偏移
+            final Map<int, double> heights = {};
+            for (int i = minIdx; i <= maxIdx; i++) {
+              heights[i] = _measureVirtualEntryHeight(virtualEntries[i], textMaxWidth, baseLineHeight);
             }
 
             final Map<int, double> offsets = {};
-            offsets[widget.currentLyricIndex] = 0;
+            offsets[activeVirtualIndex] = 0;
 
-            // 🔧 关键修复：完全自适应偏移量计算
-            // 每一行在垂直布局中占用的空间 = 其原始高度 * 对应的缩放比例
-            
             double currentOffset = 0;
-            // 活跃行的半高度（已缩放）
-            double prevHalfHeight = ((heights[widget.currentLyricIndex] ?? baseLineHeight) * _getTargetScale(0)) / 2;
+            double prevHalfHeight = (heights[activeVirtualIndex]! * (virtualEntries[activeVirtualIndex].type == _VirtualEntryType.dots ? 1.0 : _maxActiveScale)) / 2;
             
-            for (int i = widget.currentLyricIndex + 1; i <= maxIndex; i++) {
-              final h = heights[i] ?? baseLineHeight;
-              final s = _getTargetScale(i - widget.currentLyricIndex);
+            for (int i = activeVirtualIndex + 1; i <= maxIdx; i++) {
+              final h = heights[i]!;
+              final s = _getScaleSync(i - activeVirtualIndex);
               final scaledHalfHeight = (h * s) / 2;
               currentOffset += prevHalfHeight + scaledHalfHeight; 
               offsets[i] = currentOffset;
@@ -139,11 +222,11 @@ class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidClo
             }
 
             currentOffset = 0;
-            double nextHalfHeight = ((heights[widget.currentLyricIndex] ?? baseLineHeight) * _getTargetScale(0)) / 2;
+            double nextHalfHeight = (heights[activeVirtualIndex]! * (virtualEntries[activeVirtualIndex].type == _VirtualEntryType.dots ? 1.0 : _maxActiveScale)) / 2;
             
-            for (int i = widget.currentLyricIndex - 1; i >= minIndex; i--) {
-              final h = heights[i] ?? baseLineHeight;
-              final s = _getTargetScale(i - widget.currentLyricIndex);
+            for (int i = activeVirtualIndex - 1; i >= minIdx; i--) {
+              final h = heights[i]!;
+              final s = _getScaleSync(i - activeVirtualIndex);
               final scaledHalfHeight = (h * s) / 2;
               currentOffset -= (nextHalfHeight + scaledHalfHeight);
               offsets[i] = currentOffset;
@@ -151,8 +234,18 @@ class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidClo
             }
 
             List<Widget> children = [];
-            for (int i = minIndex; i <= maxIndex; i++) {
-              children.add(_buildLyricItem(i, centerY, offsets[i] ?? 0.0, heights[i] ?? baseLineHeight, layoutWidth, baseLineHeight));
+            for (int i = minIdx; i <= maxIdx; i++) {
+               children.add(_buildVirtualItem(
+                 virtualEntries[i], 
+                 i, 
+                 activeVirtualIndex, 
+                 centerY, 
+                 offsets[i] ?? 0.0, 
+                 heights[i]!, 
+                 layoutWidth,
+                 baseLineHeight,
+                 currentPos,
+               ));
             }
 
             return GestureDetector(
@@ -168,6 +261,102 @@ class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidClo
           },
         );
       },
+    );
+  }
+
+  double _measureVirtualEntryHeight(_VirtualLyricEntry entry, double maxWidth, double baseHeight) {
+    if (entry.type == _VirtualEntryType.dots) return 40.0;
+    return _measureLyricItemHeight(entry.lyricIndex!, maxWidth, baseHeight);
+  }
+
+  /// 内部辅助方法：计算同步缩放值（用于偏移量预计算）
+  double _getScaleSync(int diff) {
+    if (diff == 0) return _maxActiveScale;
+    if (diff.abs() < 3) return 1.0 - diff.abs() * 0.1;
+    return 0.7;
+  }
+
+  Widget _buildVirtualItem(_VirtualLyricEntry item, int index, int activeIndex, double centerYOffset, double relativeOffset, double itemHeight, double layoutWidth, double baseHeight, Duration currentPos) {
+    final diff = index - activeIndex;
+    final styleService = LyricStyleService();
+
+    // 1. 缩放逻辑
+    double targetScale = _getScaleSync(diff);
+    if (item.type == _VirtualEntryType.dots) targetScale = 1.0;
+
+    // 2. 最终Y坐标
+    double baseTranslation = relativeOffset;
+    double sineOffset = sin(diff * 0.8) * 20.0 * (styleService.fontSize / 32.0);
+    
+    // 【核心亮点】占位点原地消失逻辑
+    // 如果是占位点，并且已经过期 (diff < 0)
+    if (item.type == _VirtualEntryType.dots && diff < 0) {
+       // 固定在中心位置附近停留消失，不跟随向上滚动
+       baseTranslation = 0; 
+       sineOffset = 0;
+    }
+
+    double targetY = centerYOffset + baseTranslation + sineOffset - (itemHeight * targetScale / 2);
+    if (_isDragging) targetY += _dragOffset;
+    
+    // 3. 透明度逻辑
+    double targetOpacity;
+    if (diff.abs() > 4) {
+      targetOpacity = 0.0;
+    } else {
+      targetOpacity = 1.0 - diff.abs() * 0.2;
+    }
+
+    // 过期占位符强制 0 透明度 (因为它们不再占用空间)
+    if (item.type == _VirtualEntryType.dots && diff < 0) targetOpacity = 0.0;
+    
+    // 前奏占位符：只有在距离第一句 > 0 且 <= 5s 时才显示初现
+    if (item.key == 'dots-intro') {
+      final firstTime = widget.lyrics[0].startTime;
+      final timeUntilFirst = (firstTime - currentPos).inMilliseconds / 1000.0;
+      if (timeUntilFirst <= 0 || timeUntilFirst > 5.0) targetOpacity = 0.0;
+    }
+
+    targetOpacity = targetOpacity.clamp(0.0, 1.0).toDouble();
+
+    final int delayMs = (diff.abs() * 50).toInt();
+
+    final blurSigma = styleService.blurSigma;
+    double targetBlur = blurSigma;
+    if (diff == 0) targetBlur = 0.0;
+    else if (diff.abs() == 1) targetBlur = blurSigma * 0.25;
+    if (item.type == _VirtualEntryType.dots && diff < 0) targetBlur = blurSigma;
+
+    final bool isActive = (diff == 0);
+
+    // 如果是占位点
+    if (item.type == _VirtualEntryType.dots) {
+      return _DotsPlaceholder(
+        key: ValueKey(item.key),
+        targetY: targetY,
+        targetOpacity: targetOpacity,
+        layoutWidth: layoutWidth,
+      );
+    }
+
+    // 歌词项
+    return _ElasticLyricLine(
+      key: ValueKey(item.key),
+      text: widget.lyrics[item.lyricIndex!].text,
+      translation: widget.lyrics[item.lyricIndex!].translation,
+      lyric: widget.lyrics[item.lyricIndex!],
+      lyrics: widget.lyrics,     
+      index: index,             
+      lineHeight: baseHeight,
+      targetY: targetY,
+      targetScale: targetScale,
+      targetOpacity: targetOpacity,
+      targetBlur: targetBlur,
+      isActive: isActive,
+      delay: Duration(milliseconds: delayMs),
+      isDragging: _isDragging,
+      showTranslation: widget.showTranslation,
+      layoutWidth: layoutWidth,
     );
   }
 
@@ -1121,3 +1310,114 @@ class _CountdownDot extends StatelessWidget {
     );
   }
 }
+
+/// 虚拟项占位点组件 - 用于前奏和间奏的三点呼吸动画
+class _DotsPlaceholder extends StatefulWidget {
+  final double targetY;
+  final double targetOpacity;
+  final double layoutWidth;
+
+  const _DotsPlaceholder({
+    Key? key,
+    required this.targetY,
+    required this.targetOpacity,
+    required this.layoutWidth,
+  }) : super(key: key);
+
+  @override
+  State<_DotsPlaceholder> createState() => _DotsPlaceholderState();
+}
+
+class _DotsPlaceholderState extends State<_DotsPlaceholder> with TickerProviderStateMixin {
+  late AnimationController _breatheController;
+
+  @override
+  void initState() {
+    super.initState();
+    _breatheController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _breatheController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 性能优化：如果透明度极低，不渲染
+    if (widget.targetOpacity < 0.01) return const SizedBox();
+
+    return Positioned(
+      top: widget.targetY,
+      left: 0,
+      width: widget.layoutWidth,
+      child: Opacity(
+        opacity: widget.targetOpacity,
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(3, (index) {
+              return _BreathDot(
+                index: index,
+                controller: _breatheController,
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 呼吸动画点
+class _BreathDot extends StatelessWidget {
+  final int index;
+  final AnimationController controller;
+
+  const _BreathDot({required this.index, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        // 计算每个点的延迟进度 (0.0 到 1.0)
+        double progress = (controller.value - (index * 0.2)) % 1.0;
+        if (progress < 0) progress += 1.0;
+
+        // 呼吸曲线：0 -> 1 -> 0
+        final double value = sin(progress * pi);
+        
+        // 样式：Scale 0.8 -> 1.2, Opacity 0.4 -> 1.0
+        final double scale = 0.8 + (0.4 * value);
+        final double opacity = 0.4 + (0.6 * value);
+
+        return Padding(
+          padding: const EdgeInsets.only(right: 8.0),
+          child: Opacity(
+            opacity: opacity,
+            child: Transform.scale(
+              scale: scale,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
