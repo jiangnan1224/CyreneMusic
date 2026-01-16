@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -7,6 +8,7 @@ import '../services/play_history_service.dart';
 import '../services/player_service.dart';
 import '../models/track.dart';
 import '../utils/theme_manager.dart';
+import '../widgets/track_action_menu.dart';
 
 /// 播放历史页面
 class HistoryPage extends StatefulWidget {
@@ -61,29 +63,57 @@ class _HistoryPageState extends State<HistoryPage> with AutomaticKeepAliveClient
       return _buildCupertinoPage(context, history);
     }
 
+    final isExpressive = !ThemeManager().isFluentFramework && 
+                        !ThemeManager().isCupertinoFramework && 
+                        (Platform.isAndroid || Platform.isIOS);
+
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: isExpressive ? colorScheme.surfaceContainerLow : colorScheme.surface,
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
         slivers: [
           // 顶部标题栏
           SliverAppBar(
-            floating: true,
-            snap: true,
-            backgroundColor: colorScheme.surface,
-            title: Text(
-              '播放历史',
-              style: TextStyle(
-                color: colorScheme.onSurface,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+            pinned: true,
+            expandedHeight: isExpressive ? 140 : null,
+            collapsedHeight: isExpressive ? 72 : null,
+            backgroundColor: isExpressive ? colorScheme.surfaceContainerLow : colorScheme.surface,
+            surfaceTintColor: isExpressive ? colorScheme.surfaceContainerLow : colorScheme.surface,
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: EdgeInsets.only(
+                left: isExpressive ? 24 : 16,
+                bottom: isExpressive ? 16 : 16,
               ),
+              title: Text(
+                '播放历史',
+                style: TextStyle(
+                  color: colorScheme.onSurface,
+                  fontSize: isExpressive ? 28 : 24,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: isExpressive ? -1 : 0,
+                ),
+              ),
+              centerTitle: false,
             ),
             actions: [
               if (history.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: _showClearConfirmDialog,
-                  tooltip: '清空历史',
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: isExpressive ? BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                      ) : null,
+                      child: Icon(
+                        Icons.delete_sweep_rounded,
+                        color: isExpressive ? colorScheme.onSurfaceVariant : null,
+                      ),
+                    ),
+                    onPressed: _showClearConfirmDialog,
+                    tooltip: '清空历史',
+                  ),
                 ),
             ],
           ),
@@ -92,14 +122,15 @@ class _HistoryPageState extends State<HistoryPage> with AutomaticKeepAliveClient
           if (history.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: _buildStatisticsCard(colorScheme),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: _buildStatisticsCard(colorScheme, isExpressive),
               ),
             ),
 
           // 历史记录列表
           if (history.isEmpty)
             SliverFillRemaining(
+              hasScrollBody: false,
               child: _buildEmptyState(colorScheme),
             )
           else
@@ -109,7 +140,7 @@ class _HistoryPageState extends State<HistoryPage> with AutomaticKeepAliveClient
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final item = history[index];
-                    return _buildHistoryItem(item, index, colorScheme);
+                    return _buildHistoryItem(item, index, colorScheme, isExpressive);
                   },
                   childCount: history.length,
                 ),
@@ -117,8 +148,8 @@ class _HistoryPageState extends State<HistoryPage> with AutomaticKeepAliveClient
             ),
 
           // 底部留白
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 16),
+          SliverToBoxAdapter(
+            child: SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
           ),
         ],
       ),
@@ -492,64 +523,98 @@ class _HistoryPageState extends State<HistoryPage> with AutomaticKeepAliveClient
   }
 
   /// 构建统计信息卡片
-  Widget _buildStatisticsCard(ColorScheme colorScheme) {
+  Widget _buildStatisticsCard(ColorScheme colorScheme, bool isExpressive) {
     final todayCount = _historyService.getTodayPlayCount();
     final weekCount = _historyService.getWeekPlayCount();
     final totalCount = _historyService.history.length;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.analytics_outlined,
-                  size: 20,
-                  color: colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '播放统计',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatItem('今日', todayCount, colorScheme),
-                _buildStatItem('本周', weekCount, colorScheme),
-                _buildStatItem('总计', totalCount, colorScheme),
-              ],
-            ),
+    return Container(
+      decoration: isExpressive ? BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.primaryContainer.withOpacity(0.7),
+            colorScheme.primaryContainer.withOpacity(0.4),
           ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.primary.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ) : null,
+      child: Card(
+        color: isExpressive ? Colors.transparent : null,
+        margin: EdgeInsets.zero,
+        shape: isExpressive ? RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ) : null,
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isExpressive ? colorScheme.primary.withOpacity(0.1) : null,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.analytics_rounded,
+                      size: 20,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '播放统计',
+                    style: (isExpressive ? Theme.of(context).textTheme.titleLarge : Theme.of(context).textTheme.titleMedium)?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.5,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatItem('今日', todayCount, colorScheme, isExpressive),
+                  _buildStatItem('本周', weekCount, colorScheme, isExpressive),
+                  _buildStatItem('总计', totalCount, colorScheme, isExpressive),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   /// 构建单个统计项
-  Widget _buildStatItem(String label, int count, ColorScheme colorScheme) {
+  Widget _buildStatItem(String label, int count, ColorScheme colorScheme, bool isExpressive) {
     return Column(
       children: [
         Text(
           count.toString(),
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+          style: (isExpressive ? Theme.of(context).textTheme.headlineMedium : Theme.of(context).textTheme.headlineMedium)?.copyWith(
                 color: colorScheme.primary,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w900,
               ),
         ),
         const SizedBox(height: 4),
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+                color: colorScheme.onSurfaceVariant.withOpacity(0.7),
+                fontWeight: isExpressive ? FontWeight.w600 : null,
               ),
         ),
       ],
@@ -557,7 +622,157 @@ class _HistoryPageState extends State<HistoryPage> with AutomaticKeepAliveClient
   }
 
   /// 构建历史记录项
-  Widget _buildHistoryItem(PlayHistoryItem item, int index, ColorScheme colorScheme) {
+  Widget _buildHistoryItem(PlayHistoryItem item, int index, ColorScheme colorScheme, bool isExpressive) {
+    if (isExpressive) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => PlayerService().playTrack(item.toTrack()),
+              borderRadius: BorderRadius.circular(24),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    // 封面
+                    Stack(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: CachedNetworkImage(
+                              imageUrl: item.picUrl,
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                width: 60,
+                                height: 60,
+                                color: colorScheme.surfaceContainerHighest,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(8),
+                                bottomRight: Radius.circular(16),
+                              ),
+                            ),
+                            child: Text(
+                              '#${index + 1}',
+                              style: TextStyle(
+                                color: colorScheme.onPrimary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 16),
+                    // 信息
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${item.artists} • ${item.album}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colorScheme.onSurfaceVariant.withOpacity(0.8),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Text(
+                                _getSourceIcon(item.source),
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _formatTime(item.playedAt),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colorScheme.primary.withOpacity(0.7),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 更多按钮
+                    TrackMoreButton(
+                      track: item.toTrack(),
+                      onPlay: () => PlayerService().playTrack(item.toTrack()),
+                      onDelete: () {
+                        _historyService.removeHistoryItem(item);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('已从历史记录中移除'),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            duration: const Duration(seconds: 1),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(

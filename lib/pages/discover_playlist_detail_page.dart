@@ -33,9 +33,12 @@ class DiscoverPlaylistDetailPage extends StatelessWidget {
       data: _discoverPlaylistFontTheme(baseTheme),
       child: Builder(
         builder: (context) {
+          final isExpressive = !ThemeManager().isFluentFramework && 
+                              !ThemeManager().isCupertinoFramework && 
+                              (Platform.isAndroid || Platform.isIOS);
           return Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            appBar: AppBar(
+            backgroundColor: isExpressive ? Theme.of(context).colorScheme.surfaceContainerLow : Theme.of(context).colorScheme.surface,
+            appBar: isExpressive ? null : AppBar(
               backgroundColor: Colors.transparent,
               surfaceTintColor: Colors.transparent,
               elevation: 0,
@@ -58,6 +61,7 @@ class DiscoverPlaylistDetailPage extends StatelessWidget {
                 ),
               ],
             ),
+
             body: DiscoverPlaylistDetailContent(
               key: _contentKey,
               playlistId: playlistId,
@@ -1133,44 +1137,57 @@ class _DiscoverPlaylistDetailContentState
         .toList();
 
     return Container(
-      color: cs.surface,
+      color: cs.surfaceContainerLow,
       child: RefreshIndicator(
         onRefresh: _load,
         child: CustomScrollView(
           controller: _scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           slivers: [
-            // 歌单头部信息
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: _buildMaterialExpressiveHeader(detail, cs, isDark),
+            // Pinned SliverAppBar (Expressive)
+            SliverAppBar(
+              pinned: true,
+              expandedHeight: 300,
+              collapsedHeight: 72,
+              backgroundColor: cs.surfaceContainerLow,
+              surfaceTintColor: cs.surfaceContainerLow,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => Navigator.pop(context),
+              ),
+              actions: [
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.sync_rounded),
+                  ),
+                  tooltip: '同步到本地歌单',
+                  onPressed: () => _syncToLocal(context, widget.playlistId),
+                ),
+                const SizedBox(width: 8),
+              ],
+              flexibleSpace: FlexibleSpaceBar(
+                title: _buildMaterialExpressivePinnedTitle(detail, cs, isDark),
+                titlePadding: EdgeInsets.zero,
+                background: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // 其实这里可以放一张模糊的背景图，但为了简洁我们先保持背景色
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 90, 16, 16),
+                      child: _buildMaterialExpressiveHeader(detail, cs, isDark),
+                    ),
+                  ],
+                ),
               ),
             ),
             // 歌单描述
-            if (detail.description.isNotEmpty)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      detail.description,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: cs.onSurface.withOpacity(0.7),
-                        height: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+
+
             // 歌曲统计栏（不包含播放按钮）
             SliverToBoxAdapter(
               child: Padding(
@@ -1212,13 +1229,46 @@ class _DiscoverPlaylistDetailContentState
     );
   }
 
+  Widget _buildMaterialExpressivePinnedTitle(
+    NeteasePlaylistDetail detail,
+    ColorScheme cs,
+    bool isDark,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 当收缩到一定程度 (72 左右) 时显示标题
+        final bool isCollapsed = constraints.maxHeight <= 100;
+
+        return Container(
+          padding: const EdgeInsets.only(left: 56, bottom: 16),
+          alignment: Alignment.bottomLeft,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity: isCollapsed ? 1.0 : 0.0,
+            child: Text(
+              detail.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildMaterialExpressiveHeader(
     NeteasePlaylistDetail detail,
     ColorScheme cs,
     bool isDark,
   ) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -1348,19 +1398,34 @@ class _DiscoverPlaylistDetailContentState
                         )
                         .toList(),
                   ),
+                // 描述
+                if (detail.description.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    detail.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: cs.onSurface.withOpacity(0.6),
+                      height: 1.4,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 // 同步按钮
                 FilledButton.icon(
                   onPressed: () => _syncToLocal(context, widget.playlistId),
-                  icon: const Icon(Icons.sync, size: 18),
+                  icon: const Icon(Icons.sync, size: 16),
                   label: const Text('同步到本地'),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
+                      horizontal: 16,
+                      vertical: 8,
                     ),
+                    minimumSize: const Size(0, 36),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),

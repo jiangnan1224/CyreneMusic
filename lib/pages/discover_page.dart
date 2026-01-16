@@ -324,6 +324,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
     NeteaseDiscoverService service,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isExpressive = !ThemeManager().isFluentFramework && 
+                        !ThemeManager().isCupertinoFramework && 
+                        (Platform.isAndroid || Platform.isIOS);
+
 
     // 未登录状态下显示登录提示
     if (!AuthService().isLoggedIn) {
@@ -403,79 +407,52 @@ class _DiscoverPageState extends State<DiscoverPage> {
     }
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: isExpressive ? colorScheme.surfaceContainerLow : colorScheme.surface,
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
         slivers: [
           SliverAppBar(
-            floating: true,
-            snap: true,
-            backgroundColor: colorScheme.surface,
-            title: _buildMaterialTitle(colorScheme),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.all(24.0),
-            sliver: SliverToBoxAdapter(
-              child: _buildMaterialContent(service),
+            pinned: true,
+            expandedHeight: isExpressive ? 140 : null,
+            collapsedHeight: isExpressive ? 72 : null,
+            backgroundColor: isExpressive ? colorScheme.surfaceContainerLow : colorScheme.surface,
+            surfaceTintColor: isExpressive ? colorScheme.surfaceContainerLow : colorScheme.surface,
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: EdgeInsets.only(
+                left: isExpressive ? 24 : 16,
+                bottom: isExpressive ? 16 : 16,
+              ),
+              title: _buildMaterialTitle(colorScheme, isExpressive),
+              centerTitle: false,
             ),
           ),
+          SliverPadding(
+            padding: EdgeInsets.all(isExpressive ? 16.0 : 24.0),
+            sliver: SliverToBoxAdapter(
+              child: _buildMaterialContent(service, isExpressive),
+            ),
+          ),
+
         ],
       ),
     );
   }
 
-  Widget _buildMaterialTitle(ColorScheme colorScheme) {
-    if (_selectedPlaylistId == null) {
-      return Text(
-        '发现',
-        style: TextStyle(
-          color: colorScheme.onSurface,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    }
 
-    // 面包屑样式：发现 > 歌单名
-    return Row(
-      children: [
-        InkWell(
-          onTap: () {
-            setState(() {
-              _selectedPlaylistId = null;
-              _selectedPlaylistName = null;
-            });
-          },
-          child: Row(
-            children: [
-              const Icon(Icons.explore, size: 20),
-              const SizedBox(width: 6),
-              const Text('发现', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            _selectedPlaylistName ?? '',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-          ),
-        ),
-      ],
+  Widget _buildMaterialTitle(ColorScheme colorScheme, bool isExpressive) {
+    return Text(
+      '发现',
+      style: TextStyle(
+        color: colorScheme.onSurface,
+        fontSize: isExpressive ? 28 : 24,
+        fontWeight: FontWeight.w900,
+        letterSpacing: isExpressive ? -1 : 0,
+      ),
     );
   }
 
-  Widget _buildMaterialContent(NeteaseDiscoverService service) {
-    // 二级：歌单详情（内嵌在发现页，使用面包屑）
-    if (_selectedPlaylistId != null) {
-      return SizedBox(
-        height: MediaQuery.of(context).size.height - 160,
-        child: DiscoverPlaylistDetailContent(playlistId: _selectedPlaylistId!),
-      );
-    }
+  Widget _buildMaterialContent(NeteaseDiscoverService service, bool isExpressive) {
+
 
     if (service.isLoading) {
       // 使用骨架屏替代简单的加载指示器
@@ -511,8 +488,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildMaterialTagSelector(service),
+            _buildMaterialTagSelector(service, isExpressive),
             const SizedBox(height: 16),
+
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -520,12 +498,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 crossAxisCount: crossAxisCount,
                 mainAxisSpacing: 16,
                 crossAxisSpacing: 16,
-                // 调整纵横比，避免卡片内容溢出
-                childAspectRatio: 0.72,
+                // 调整纵横比，由 0.72 减至 0.7，为卡片文本区提供更多空间
+                childAspectRatio: isExpressive ? 0.7 : 0.72,
               ),
               itemCount: items.length,
               itemBuilder: (context, index) => _MaterialPlaylistCard(
                 summary: items[index],
+                isExpressive: isExpressive,
                 onOpen: (id, name) {
                   setState(() {
                     _selectedPlaylistId = id;
@@ -533,6 +512,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   });
                 },
               ),
+
             ),
           ],
         );
@@ -540,14 +520,59 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  Widget _buildMaterialTagSelector(NeteaseDiscoverService service) {
+  Widget _buildMaterialTagSelector(NeteaseDiscoverService service, bool isExpressive) {
     final current = service.currentCat;
+    final label = current.isEmpty ? '全部歌单' : current;
+    
+    if (isExpressive) {
+      return InkWell(
+        onTap: () => _showMaterialTagDialog(service),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.tune_rounded,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 18,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
     return ChoiceChip(
-      label: Text(current.isEmpty ? '全部歌单' : current),
+      label: Text(label),
       selected: true,
       onSelected: (_) => _showMaterialTagDialog(service),
     );
   }
+
 
   void _showMaterialTagDialog(NeteaseDiscoverService service) {
     final tags = service.tags;
@@ -939,13 +964,132 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
 class _MaterialPlaylistCard extends StatelessWidget {
   final NeteasePlaylistSummary summary;
+  final bool isExpressive;
   final void Function(int id, String name)? onOpen;
-  const _MaterialPlaylistCard({required this.summary, this.onOpen});
+  const _MaterialPlaylistCard({required this.summary, this.isExpressive = false, this.onOpen});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    
+    if (isExpressive) {
+      return Container(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.05),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          child: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DiscoverPlaylistDetailPage(playlistId: summary.id),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AspectRatio(
+                  aspectRatio: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Hero(
+                      tag: 'playlist_cover_${summary.id}',
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: CachedNetworkImage(
+
+                        imageUrl: summary.coverImgUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: colorScheme.surfaceContainerHighest,
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: colorScheme.surfaceContainerHighest,
+                          child: Icon(Icons.music_note_rounded, color: colorScheme.primary),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, isExpressive ? 8 : 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          summary.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colorScheme.onSurface,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'by ${summary.creatorNickname}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant.withOpacity(0.7),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.play_circle_outline_rounded,
+                              size: 12,
+                              color: colorScheme.primary.withOpacity(0.7),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                '${summary.playCount} 播放',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colorScheme.primary.withOpacity(0.7),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    
     return Card(
+
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () async {

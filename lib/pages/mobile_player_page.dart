@@ -14,6 +14,7 @@ import 'mobile_player_components/mobile_player_controls.dart';
 import 'mobile_player_components/mobile_player_control_center.dart';
 import 'mobile_player_components/mobile_player_karaoke_lyric.dart';
 import 'mobile_player_components/mobile_player_fluid_cloud_layout.dart';
+import 'mobile_player_components/mobile_player_classic_layout.dart';
 import 'mobile_player_components/mobile_player_dialogs.dart';
 import '../../services/lyric_style_service.dart';
 
@@ -382,72 +383,14 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
                 // 标准布局模式：原有背景 + Safe Area
                 const MobilePlayerBackground(),
                 SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final showCover = !backgroundService.enableGradient || 
-                                      backgroundService.backgroundType != PlayerBackgroundType.adaptive;
-                      
-                      // 原有布局
-                      return Column(
-                            children: [
-                    // 顶部栏
-                    MobilePlayerAppBar(
-                      onBackPressed: () => Navigator.pop(context),
-                    ),
-                    
-                    // 主要内容区域 - 包含专辑封面、歌曲信息和歌词
-            Expanded(
-          child: Column(
-            children: [
-                          // 专辑封面和歌曲信息区域 (占 75% 空间)
-                          Expanded(
-                            flex: 75,
-                            child: MobilePlayerSongInfo(showCover: showCover),
-                          ),
-                          
-                          // 歌词区域 (大幅度上移，占 25% 空间)
-                          Expanded(
-                            flex: 25,
-                            child: Transform.translate(
-                              offset: const Offset(0, -80), // 向上移动80像素（增加上移幅度）
-                              child: Align(
-                                alignment: Alignment.center,
-                                child: MobilePlayerKaraokeLyric(
-                                  lyrics: _lyrics,
-                                  currentLyricIndex: _currentLyricIndex,
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const MobileLyricPage(),
-                                    ),
-                                  ),
-                                  showTranslation: true,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    // 底部控制区域 + 左下角译文开关
-                    Stack(
-                      children: [
-                        MobilePlayerControls(
-                          onPlaylistPressed: () => MobilePlayerDialogs.showPlaylistBottomSheet(context),
-                          onSleepTimerPressed: () => MobilePlayerDialogs.showSleepTimer(context),
-                          onVolumeControlPressed: _toggleControlCenter,
-                          onAddToPlaylistPressed: (track) => MobilePlayerDialogs.showAddToPlaylist(context, track),
-                        ),
-
-                      ],
-                    ),
-              ],
-                        );
-                      },
-                    ),
+                  child: MobilePlayerClassicLayout(
+                    lyrics: _lyrics,
+                    currentLyricIndex: _currentLyricIndex,
+                    onBackPressed: () => Navigator.pop(context),
+                    onPlaylistPressed: () => MobilePlayerDialogs.showPlaylistBottomSheet(context),
                   ),
-                ],
+                ),
+              ],
 
           // 控制中心面板
           MobilePlayerControlCenter(

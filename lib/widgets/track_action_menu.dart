@@ -20,14 +20,20 @@ class TrackActionMenu {
     required BuildContext context,
     required Track track,
     VoidCallback? onPlay,
+    VoidCallback? onDelete,
     Offset? anchor,
   }) {
     final themeManager = ThemeManager();
-    
+    final isExpressive = !themeManager.isCupertinoFramework && 
+                        !themeManager.isFluentFramework && 
+                        (Platform.isAndroid || Platform.isIOS);
+
     if (themeManager.isCupertinoFramework) {
       _showCupertinoActionSheet(context, track, onPlay);
     } else if (themeManager.isFluentFramework && Platform.isWindows) {
       _showFluentMenu(context, track, onPlay, anchor);
+    } else if (isExpressive) {
+      _showExpressiveBottomSheet(context, track, onPlay, onDelete);
     } else {
       _showMaterialMenu(context, track, onPlay);
     }
@@ -215,6 +221,243 @@ class TrackActionMenu {
   }
 
 
+  /// Material Design Expressive 风格底部操作板
+  static void _showExpressiveBottomSheet(
+    BuildContext context,
+    Track track,
+    VoidCallback? onPlay,
+    VoidCallback? onDelete,
+  ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.45,
+        minChildSize: 0.3,
+        maxChildSize: 0.8,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                colorScheme.surfaceContainerHigh,
+                colorScheme.surfaceContainerHighest.withOpacity(isDark ? 0.95 : 0.98),
+              ],
+            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
+                blurRadius: 30,
+                offset: const Offset(0, -10),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // 拖动指示器
+              Container(
+                padding: const EdgeInsets.only(top: 14, bottom: 10),
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: colorScheme.outline.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              // 标题栏
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 4, 16, 16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            colorScheme.primary.withOpacity(0.2),
+                            colorScheme.primary.withOpacity(0.1),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: CachedNetworkImage(
+                          imageUrl: track.picUrl,
+                          fit: BoxFit.cover,
+                          errorWidget: (context, url, error) => Icon(
+                            Icons.music_note_rounded,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            track.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colorScheme.onSurface,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            track.artists,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant.withOpacity(0.7),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Material(
+                      color: colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        onTap: () => Navigator.pop(context),
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.close_rounded,
+                            color: colorScheme.onSurfaceVariant,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // 操作列表
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  children: [
+                    _buildExpressiveActionItem(
+                      context,
+                      icon: Icons.play_arrow_rounded,
+                      label: '立即播放',
+                      onTap: () {
+                        Navigator.pop(context);
+                        onPlay?.call();
+                      },
+                    ),
+                    _buildExpressiveActionItem(
+                      context,
+                      icon: Icons.queue_music_rounded,
+                      label: '添加到播放队列',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _addToQueue(context, track);
+                      },
+                    ),
+                    _buildExpressiveActionItem(
+                      context,
+                      icon: Icons.playlist_add_rounded,
+                      label: '添加到歌单',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showAddToPlaylistDialog(context, track);
+                      },
+                    ),
+                    if (onDelete != null)
+                      _buildExpressiveActionItem(
+                        context,
+                        icon: Icons.delete_outline_rounded,
+                        label: '从历史记录中删除',
+                        isDestructive: true,
+                        onTap: () {
+                          Navigator.pop(context);
+                          onDelete?.call();
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildExpressiveActionItem(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = isDestructive ? colorScheme.error : colorScheme.onSurface;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: isDestructive 
+            ? colorScheme.errorContainer.withOpacity(0.3)
+            : colorScheme.surfaceContainerHighest.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 24),
+                const SizedBox(width: 16),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: color.withOpacity(0.3),
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// iOS Cupertino 风格操作表
   static void _showCupertinoActionSheet(
     BuildContext context,
@@ -222,6 +465,7 @@ class TrackActionMenu {
     VoidCallback? onPlay,
   ) {
     final isDark = MediaQuery.of(context).platformBrightness == Brightness.dark;
+
     
     showCupertinoModalPopup(
       context: context,
@@ -1022,12 +1266,14 @@ class TrackActionMenu {
 class TrackMoreButton extends StatelessWidget {
   final Track track;
   final VoidCallback? onPlay;
+  final VoidCallback? onDelete;
   final double? size;
   
   const TrackMoreButton({
     super.key,
     required this.track,
     this.onPlay,
+    this.onDelete,
     this.size,
   });
 
@@ -1043,6 +1289,7 @@ class TrackMoreButton extends StatelessWidget {
           context: context,
           track: track,
           onPlay: onPlay,
+          onDelete: onDelete,
         ),
         child: Icon(
           CupertinoIcons.ellipsis,
@@ -1060,6 +1307,7 @@ class TrackMoreButton extends StatelessWidget {
           context: context,
           track: track,
           onPlay: onPlay,
+          onDelete: onDelete,
         ),
       );
     } else {
@@ -1078,6 +1326,7 @@ class TrackMoreButton extends StatelessWidget {
           context: context,
           track: track,
           onPlay: onPlay,
+          onDelete: onDelete,
         ),
         tooltip: '更多操作',
       );

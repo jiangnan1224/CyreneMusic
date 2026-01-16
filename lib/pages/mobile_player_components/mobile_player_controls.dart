@@ -5,6 +5,7 @@ import '../../services/sleep_timer_service.dart';
 import '../../services/download_service.dart';
 import '../../models/track.dart';
 import '../../models/song_detail.dart';
+import '../../widgets/wavy_split_progress_bar.dart';
 
 /// 移动端播放器控制区域组件
 /// 包含进度条、播放控制按钮等（不包含音量控制，改为控制中心按钮）
@@ -60,67 +61,55 @@ class MobilePlayerControls extends StatelessWidget {
 
   /// 构建进度条
   Widget _buildProgressBar() {
-    final player = PlayerService();
-    
-    return Column(
-      children: [
-        AnimatedBuilder(
-          animation: player.positionNotifier,
-          builder: (context, child) {
-            final position = player.positionNotifier.value;
-            final duration = player.duration;
-            
-            return SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                activeTrackColor: Colors.white,
-                inactiveTrackColor: Colors.white.withOpacity(0.3),
-                thumbColor: Colors.white,
-                overlayColor: Colors.white.withOpacity(0.2),
-              ),
-              child: Slider(
+    return AnimatedBuilder(
+      animation: PlayerService(),
+      builder: (context, child) {
+        final player = PlayerService();
+        final position = player.position;
+        final duration = player.duration;
+        
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              child: WavySplitProgressBar(
                 value: duration.inMilliseconds > 0
-                    ? position.inMilliseconds.toDouble()
-                    : 0,
-                max: duration.inMilliseconds.toDouble(),
+                    ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
+                    : 0.0,
+                isPlaying: player.isPlaying,
                 onChanged: (value) {
-                  player.seek(Duration(milliseconds: value.toInt()));
+                  final seekTo = duration.inMilliseconds * value;
+                  player.seek(Duration(milliseconds: seekTo.toInt()));
                 },
+                activeColor: Colors.white,
+                inactiveColor: Colors.white.withOpacity(0.2),
               ),
-            );
-          },
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              AnimatedBuilder(
-                animation: player.positionNotifier,
-                builder: (context, child) => Text(
-                  _formatDuration(player.positionNotifier.value),
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 12,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _formatDuration(position),
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 12,
+                    ),
                   ),
-                ),
-              ),
-              AnimatedBuilder(
-                animation: player, // 总时长监听主服务即可
-                builder: (context, child) => Text(
-                  _formatDuration(player.duration),
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 12,
+                  Text(
+                    _formatDuration(duration),
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 12,
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -195,12 +184,16 @@ class MobilePlayerControls extends StatelessWidget {
                 SizedBox(width: buttonSpacing),
                 
                 // 播放/暂停
-                Container(
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
                   width: playButtonSize,
                   height: playButtonSize,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(
+                      player.isPlaying ? 16 : playButtonSize / 2,
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.white.withOpacity(0.3),

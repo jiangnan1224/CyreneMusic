@@ -537,18 +537,25 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
         // 使用提取的主题色，回退到深紫色
         final color = themeColor ?? Colors.grey[700]!;
         
-        return Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                color.withOpacity(0.3),
-                Colors.black,
-                Colors.black,
-              ],
+        return Stack(
+          children: [
+            // 底层纯黑背景，确保不透明
+            Container(color: Colors.black),
+            // 上层渐变
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    color.withOpacity(0.3),
+                    Colors.black,
+                    Colors.black,
+                  ],
+                ),
+              ),
             ),
-          ),
+          ],
         );
       },
     );
