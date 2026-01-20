@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Cyrene Music"
-#define MyAppVersion "1.2.10"
+#define MyAppVersion "1.2.30"
 #define MyAppPublisher "morax"
 #define MyAppURL "https://music.cyrele.ltd"
 #define MyAppExeName "cyrene_music.exe"
@@ -43,7 +43,7 @@ AllowNoIcons=yes
 RestartIfNeededByRun=no
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "chinesesimplified"; MessagesFile: "compiler:Languages\Chinese.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

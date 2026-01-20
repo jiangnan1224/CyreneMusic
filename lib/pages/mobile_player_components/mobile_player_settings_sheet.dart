@@ -30,6 +30,8 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
+  // 性能优化：动画完成后停止使用 ScaleTransition
+  bool _animationCompleted = false;
 
   @override
   void initState() {
@@ -42,11 +44,21 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet>
       parent: _animController,
       curve: Curves.elasticOut,
     );
+    
+    // 监听动画完成
+    _animController.addStatusListener(_onAnimationStatus);
     _animController.forward();
+  }
+
+  void _onAnimationStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && mounted) {
+      setState(() => _animationCompleted = true);
+    }
   }
 
   @override
   void dispose() {
+    _animController.removeStatusListener(_onAnimationStatus);
     _animController.dispose();
     super.dispose();
   }
@@ -63,30 +75,29 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet>
       maxChildSize: 0.9,
       expand: false,
       builder: (context, scrollController) {
-        return ScaleTransition(
-          scale: Tween<double>(begin: 0.95, end: 1.0).animate(_scaleAnimation),
-          child: Container(
-            decoration: BoxDecoration(
-              // Expressive 渐变背景
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  colorScheme.surfaceContainerHigh,
-                  colorScheme.surfaceContainerHighest.withOpacity(isDark ? 0.95 : 0.98),
-                ],
-              ),
-              // 超大圆角
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-              // 柔和阴影
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
-                  blurRadius: 30,
-                  offset: const Offset(0, -10),
-                ),
+        // 构建主内容
+        final content = Container(
+          decoration: BoxDecoration(
+            // Expressive 渐变背景
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                colorScheme.surfaceContainerHigh,
+                colorScheme.surfaceContainerHighest.withOpacity(isDark ? 0.95 : 0.98),
               ],
             ),
+            // 超大圆角
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            // 柔和阴影
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
+                blurRadius: 30,
+                offset: const Offset(0, -10),
+              ),
+            ],
+          ),
             child: Column(
               children: [
                 // Expressive 拖动指示器
@@ -118,34 +129,37 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet>
                     controller: scrollController,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     physics: const BouncingScrollPhysics(),
+                    // 性能优化：缓存更多的内容避免频繁重建
+                    cacheExtent: 500,
+                    // 子组件使用 RepaintBoundary 隔离重绘
                     children: const [
                       // 播放顺序
-                      PlaybackModeSection(),
+                      RepaintBoundary(child: PlaybackModeSection()),
                       
                       SizedBox(height: 24),
                       
                       // 播放器样式
-                      PlayerStyleSection(),
+                      RepaintBoundary(child: PlayerStyleSection()),
                       
                       SizedBox(height: 24),
 
                       // 歌词细节设置
-                      LyricDetailSection(),
+                      RepaintBoundary(child: LyricDetailSection()),
 
                       SizedBox(height: 24),
                       
                       // 播放器背景
-                      BackgroundSection(),
+                      RepaintBoundary(child: BackgroundSection()),
                       
                       SizedBox(height: 24),
 
                       // 自动折叠控制栏
-                      InteractionSection(),
+                      RepaintBoundary(child: InteractionSection()),
 
                       SizedBox(height: 24),
                       
                       // 睡眠定时器
-                      SleepTimerSection(),
+                      RepaintBoundary(child: SleepTimerSection()),
                       
                       SizedBox(height: 48),
                     ],
@@ -153,7 +167,16 @@ class _MobilePlayerSettingsSheetState extends State<MobilePlayerSettingsSheet>
                 ),
               ],
             ),
-          ),
+          );
+        
+        // 性能优化：动画完成后不使用 ScaleTransition
+        if (_animationCompleted) {
+          return content;
+        }
+        
+        return ScaleTransition(
+          scale: Tween<double>(begin: 0.95, end: 1.0).animate(_scaleAnimation),
+          child: content,
         );
       },
     );

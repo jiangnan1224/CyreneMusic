@@ -234,7 +234,7 @@ class _MobilePlayerFluidCloudLayoutState extends State<MobilePlayerFluidCloudLay
 
     // --- 歌词模式参数 ---
     final smallCoverSize = 56.0;
-    final smallCoverTop = safePadding.top + 8.0;
+    final smallCoverTop = safePadding.top + 24.0;
     final smallCoverLeft = 16.0;
 
     // Animation Logic: Shrink by 10% when paused in Cover Mode
@@ -256,7 +256,10 @@ class _MobilePlayerFluidCloudLayoutState extends State<MobilePlayerFluidCloudLay
       child: Transform.translate(
         offset: Offset(0, _dragOffset),
         child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          // 仅在向下拖动时显示圆角，全屏状态无圆角
+          borderRadius: _dragOffset > 0
+              ? const BorderRadius.vertical(top: Radius.circular(32))
+              : BorderRadius.zero,
           child: Stack(
             children: [
               // 0. 背景层 (现在作为布局的一部分，以便同步平移)
@@ -837,7 +840,7 @@ class _MobilePlayerFluidCloudLayoutState extends State<MobilePlayerFluidCloudLay
     final artists = song?.arName ?? track?.artists ?? '未知艺术家';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
       child: Row(
         children: [
           // 专辑封面占位 (实际封面由顶层 Stack 处理)
@@ -1064,62 +1067,76 @@ class _MobilePlayerFluidCloudLayoutState extends State<MobilePlayerFluidCloudLay
   /// 构建底部导航（参考 HTML footer#bottom-nav）
   Widget _buildBottomNavigation(BuildContext context, Track? track) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // 左侧：下载按钮 + 歌曲信息(wiki)按钮 (固定宽度容器)
-          SizedBox(
-            width: 100, // 固定宽度，防止模式切换时移位
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!_showCoverMode) ...[
-                  if (track != null) _DownloadButton(track: track) else const SizedBox(width: 48),
-                  const SizedBox(width: 4),
-                  if (track != null && track.source == MusicSource.netease)
-                    IconButton(
-                      icon: Icon(
-                        _showSongWikiPanel ? CupertinoIcons.text_quote : CupertinoIcons.info_circle,
-                        color: _showSongWikiPanel ? Colors.white : Colors.white.withOpacity(0.7),
-                      ),
-                      iconSize: 22,
-                      onPressed: () {
-                        setState(() => _showSongWikiPanel = !_showSongWikiPanel);
-                      },
-                    ),
-                ],
-              ],
+          // 1. 歌词模式切换按钮 (最左侧)
+          IconButton(
+            icon: Icon(
+              CupertinoIcons.quote_bubble,
+              color: !_showCoverMode ? Colors.white : Colors.white.withOpacity(0.4),
             ),
+            iconSize: 24,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () {
+              setState(() => _showCoverMode = !_showCoverMode);
+            },
           ),
-
-          // 中间区域：歌词切换(Lyic Toggle)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Apple Music 风格的歌词开关按钮
-              IconButton(
-                icon: Icon(
-                  CupertinoIcons.quote_bubble,
-                  color: !_showCoverMode ? Colors.white : Colors.white.withOpacity(0.4),
-                ),
-                onPressed: () {
-                  setState(() => _showCoverMode = !_showCoverMode);
-                },
+          
+          // 2. 下载按钮
+          _buildNavButton(
+            icon: track != null 
+                ? _DownloadButton(track: track) 
+                : Icon(Icons.download_rounded, color: Colors.white.withOpacity(0.3), size: 24),
+            visible: !_showCoverMode && track != null,
+            placeholder: true,
+          ),
+          
+          // 3. 歌曲信息按钮 (仅网易云歌曲显示)
+          _buildNavButton(
+            icon: IconButton(
+              icon: Icon(
+                _showSongWikiPanel ? CupertinoIcons.text_quote : CupertinoIcons.info_circle,
+                color: _showSongWikiPanel ? Colors.white : Colors.white.withOpacity(0.7),
               ),
-            ],
+              iconSize: 22,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () {
+                setState(() => _showSongWikiPanel = !_showSongWikiPanel);
+              },
+            ),
+            visible: !_showCoverMode && track != null && track.source == MusicSource.netease,
+            placeholder: true,
           ),
-
-          // 右侧：播放列表按钮
+          
+          // 4. 播放列表按钮
           IconButton(
             icon: const Icon(Icons.queue_music_rounded),
             color: Colors.white.withOpacity(0.8),
-            iconSize: 28,
+            iconSize: 26,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
             onPressed: widget.onPlaylistPressed,
           ),
         ],
       ),
     );
+  }
+
+  /// 构建底部导航按钮（支持条件显示和占位）
+  Widget _buildNavButton({
+    required Widget icon,
+    required bool visible,
+    bool placeholder = false,
+  }) {
+    if (visible) {
+      return icon;
+    }
+    // 占位符保持间距一致
+    return placeholder ? const SizedBox(width: 24) : const SizedBox.shrink();
   }
 
 
@@ -1173,6 +1190,7 @@ class _FavoriteButtonState extends State<_FavoriteButton> {
   bool _isInPlaylist = false;
   bool _isLoading = true;
   List<String> _playlistNames = [];
+  List<int> _playlistIds = [];
 
   @override
   void initState() {
@@ -1199,9 +1217,78 @@ class _FavoriteButtonState extends State<_FavoriteButton> {
       setState(() {
         _isInPlaylist = result.inPlaylist;
         _playlistNames = result.playlistNames;
+        _playlistIds = result.playlistIds;
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _removeFromPlaylists() async {
+    if (_playlistIds.isEmpty) return;
+    
+    final playlistService = PlaylistService();
+    
+    for (final playlistId in _playlistIds) {
+      await playlistService.removeTrackFromPlaylist(
+        playlistId,
+        widget.track.id.toString(),
+        widget.track.source.name,
+      );
+    }
+    
+    // 刷新状态
+    _checkIfInPlaylist();
+  }
+
+  void _showManageOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[700],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Text(
+                '已收藏到: ${_playlistNames.join(", ")}',
+                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
+              title: const Text('从所有歌单移除', style: TextStyle(color: Colors.white)),
+              onTap: () async {
+                Navigator.pop(context);
+                await _removeFromPlaylists();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.playlist_add, color: Colors.white70),
+              title: const Text('添加到其他歌单', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                MobilePlayerDialogs.showAddToPlaylist(context, widget.track);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -1230,7 +1317,11 @@ class _FavoriteButtonState extends State<_FavoriteButton> {
         color: _isInPlaylist ? Colors.redAccent : Colors.white.withOpacity(0.8),
       ),
       onPressed: () {
-        MobilePlayerDialogs.showAddToPlaylist(context, widget.track);
+        if (_isInPlaylist) {
+          _showManageOptions(context);
+        } else {
+          MobilePlayerDialogs.showAddToPlaylist(context, widget.track);
+        }
       },
       tooltip: tooltip,
     );

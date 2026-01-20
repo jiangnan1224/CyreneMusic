@@ -45,27 +45,27 @@ class DeveloperModeService extends ChangeNotifier {
   }
 
   /// 启用开发者模式
-  void _enableDeveloperMode() {
+  Future<void> _enableDeveloperMode() async {
     _isDeveloperMode = true;
-    _saveDeveloperMode();
+    await _saveDeveloperMode();
     addLog('🚀 开发者模式已启用');
     notifyListeners();
     print('🚀 [DeveloperMode] 开发者模式已启用');
   }
 
   /// 禁用开发者模式
-  void disableDeveloperMode() {
+  Future<void> disableDeveloperMode() async {
     _isDeveloperMode = false;
-    _saveDeveloperMode();
+    await _saveDeveloperMode();
     addLog('🔒 开发者模式已禁用');
     notifyListeners();
     print('🔒 [DeveloperMode] 开发者模式已禁用');
   }
 
   /// 切换搜索结果合并开关
-  void toggleSearchResultMerge(bool value) {
+  Future<void> toggleSearchResultMerge(bool value) async {
     _isSearchResultMergeEnabled = value;
-    _saveDeveloperMode();
+    await _saveDeveloperMode();
     addLog(value ? '🔄 已启用搜索结果合并' : '🔄 已禁用搜索结果合并');
     notifyListeners();
   }

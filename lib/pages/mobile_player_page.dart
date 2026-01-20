@@ -105,7 +105,9 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
 
   /// 初始化数据
   void _initializeData() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // 延迟加载歌词，让路由动画先完成 (300ms 动画 + 50ms 缓冲)
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
       final currentTrack = PlayerService().currentTrack;
       _lastTrackId = currentTrack != null 
           ? '${currentTrack.source.name}_${currentTrack.id}' 

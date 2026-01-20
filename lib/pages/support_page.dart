@@ -297,15 +297,36 @@ class _SupportPageState extends State<SupportPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final isLoggedIn = AuthService().isLoggedIn;
     
+    // 检测是否为 Expressive 主题（移动端 Material Design）
+    final isExpressive = !ThemeManager().isFluentFramework && 
+                         !ThemeManager().isCupertinoFramework && 
+                         (Platform.isAndroid || Platform.isIOS);
+    
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: isExpressive ? colorScheme.surfaceContainerLow : colorScheme.surface,
       body: CustomScrollView(
+        physics: isExpressive ? const BouncingScrollPhysics() : null,
         slivers: [
           SliverAppBar(
-            floating: true,
-            snap: true,
-            backgroundColor: colorScheme.surface,
-            title: Text(
+            pinned: true,
+            expandedHeight: isExpressive ? 140 : null,
+            collapsedHeight: isExpressive ? 72 : null,
+            backgroundColor: isExpressive ? colorScheme.surfaceContainerLow : colorScheme.surface,
+            surfaceTintColor: isExpressive ? colorScheme.surfaceContainerLow : colorScheme.surface,
+            flexibleSpace: isExpressive ? FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 24, bottom: 16),
+              title: Text(
+                '支持',
+                style: TextStyle(
+                  color: colorScheme.onSurface,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -1,
+                ),
+              ),
+              centerTitle: false,
+            ) : null,
+            title: isExpressive ? null : Text(
               '支持',
               style: TextStyle(
                 color: colorScheme.onSurface,
@@ -315,19 +336,22 @@ class _SupportPageState extends State<SupportPage> {
             ),
           ),
           SliverPadding(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.all(isExpressive ? 20.0 : 24.0),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 // 只有登录后才显示赞助项目
                 if (isLoggedIn) ...[
-                  const DonateSettings(),
-                  const SizedBox(height: 24),
+                  if (isExpressive)
+                    _buildExpressiveDonateSection(context, colorScheme)
+                  else
+                    const DonateSettings(),
+                  SizedBox(height: isExpressive ? 20 : 24),
                 ],
                 // QQ群入口
                 if (!_loading && _config?.qqGroup.enabled == true)
-                  _buildMaterialQQGroupSection(context),
+                  _buildMaterialQQGroupSection(context, isExpressive),
                 if (!_loading && _config?.qqGroup.enabled == true)
-                  const SizedBox(height: 24),
+                  SizedBox(height: isExpressive ? 20 : 24),
                 const SponsorWall(),
                 const SizedBox(height: 40),
               ]),
@@ -335,6 +359,121 @@ class _SupportPageState extends State<SupportPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Expressive 风格的赞助区域
+  Widget _buildExpressiveDonateSection(BuildContext context, ColorScheme colorScheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12.0, left: 4.0),
+          child: Text(
+            '支持与赞助',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: colorScheme.primary,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              colors: [
+                colorScheme.primaryContainer.withOpacity(0.6),
+                colorScheme.primaryContainer.withOpacity(0.3),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: colorScheme.primary.withOpacity(0.1),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(24),
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => Dialog(
+                    backgroundColor: colorScheme.surface,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+                      child: const SingleChildScrollView(
+                        padding: EdgeInsets.all(24),
+                        child: DonateSettings(),
+                      ),
+                    ),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        Icons.favorite_rounded,
+                        color: colorScheme.primary,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '赞助项目',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: colorScheme.onSurface,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '您的支持是我们持续维护与改进的动力',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: colorScheme.onSurface.withOpacity(0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: colorScheme.onSurface.withOpacity(0.4),
+                      size: 28,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -354,8 +493,101 @@ class _SupportPageState extends State<SupportPage> {
     );
   }
 
-  Widget _buildMaterialQQGroupSection(BuildContext context) {
+  Widget _buildMaterialQQGroupSection(BuildContext context, [bool isExpressive = false]) {
     final groupName = _config?.qqGroup.name ?? 'QQ群';
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    if (isExpressive) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12.0, left: 4.0),
+            child: Text(
+              '加入社区',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: colorScheme.primary,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: _openQQGroup,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          Icons.people_rounded,
+                          color: colorScheme.onSecondaryContainer,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '加入QQ群',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: colorScheme.onSurface,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              groupName,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: colorScheme.onSurface.withOpacity(0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: colorScheme.onSurface.withOpacity(0.4),
+                        size: 28,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    
+    // 非 Expressive 模式的原有实现
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

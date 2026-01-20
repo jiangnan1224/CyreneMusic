@@ -487,8 +487,9 @@ extension MyPageMaterialUI on _MyPageState {
     final filteredTracks = _filterTracks(allTracks);
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: colorScheme.surfaceContainerLow,
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
         slivers: [
           _buildMaterialDetailAppBar(playlist, colorScheme, allTracks),
           if (_isSearchMode) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: _buildMaterialSearchField(colorScheme))),
@@ -522,10 +523,12 @@ extension MyPageMaterialUI on _MyPageState {
         hintText: '搜索歌曲、歌手、专辑...',
         prefixIcon: const Icon(Icons.search),
         suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchController.clear(); _onSearchChanged(''); }) : null,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: colorScheme.primary, width: 2)),
         filled: true,
-        fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.5),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        fillColor: colorScheme.surfaceContainerHigh,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       ),
       onChanged: _onSearchChanged,
       autofocus: true,
@@ -549,27 +552,65 @@ extension MyPageMaterialUI on _MyPageState {
 
   Widget _buildMaterialDetailAppBar(Playlist playlist, ColorScheme colorScheme, List<PlaylistTrack> tracks) {
     return SliverAppBar(
-      floating: true, snap: true,
-      backgroundColor: colorScheme.surface,
-      leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: _backToList),
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(_isEditMode ? '已选择 ${_selectedTrackIds.length} 首' : playlist.name, style: TextStyle(color: colorScheme.onSurface, fontSize: 20, fontWeight: FontWeight.bold)),
-          if (!_isEditMode && playlist.isDefault) Text('默认歌单', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12)),
-        ],
+      pinned: true,
+      floating: false,
+      backgroundColor: colorScheme.surfaceContainerLow,
+      surfaceTintColor: colorScheme.surfaceContainerLow,
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: IconButton(
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.arrow_back, color: colorScheme.onSurfaceVariant),
+          ),
+          onPressed: _backToList,
+        ),
+      ),
+      titleSpacing: 0,
+      title: Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _isEditMode ? '已选择 ${_selectedTrackIds.length} 首' : playlist.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.3,
+              ),
+            ),
+            if (!_isEditMode && playlist.isDefault)
+              Text(
+                '默认歌单',
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
+        ),
       ),
       actions: [
         if (_isEditMode) ...[
-          IconButton(icon: Icon(_selectedTrackIds.length == tracks.length ? Icons.check_box : Icons.check_box_outline_blank), onPressed: tracks.isNotEmpty ? _toggleSelectAll : null, tooltip: _selectedTrackIds.length == tracks.length ? '取消全选' : '全选'),
-          IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent), onPressed: _selectedTrackIds.isNotEmpty ? _batchRemoveTracks : null, tooltip: '删除选中'),
+          IconButton(icon: Icon(_selectedTrackIds.length == tracks.length ? Icons.check_box : Icons.check_box_outline_blank, size: 22), onPressed: tracks.isNotEmpty ? _toggleSelectAll : null, tooltip: _selectedTrackIds.length == tracks.length ? '取消全选' : '全选'),
+          IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent, size: 22), onPressed: _selectedTrackIds.isNotEmpty ? _batchRemoveTracks : null, tooltip: '删除选中'),
           TextButton(onPressed: _toggleEditMode, child: const Text('取消')),
         ] else ...[
-          if (tracks.isNotEmpty) IconButton(icon: Icon(_isSearchMode ? Icons.search_off : Icons.search), onPressed: _toggleSearchMode, tooltip: _isSearchMode ? '关闭搜索' : '搜索歌曲'),
-          if (tracks.isNotEmpty) IconButton(icon: const Icon(Icons.swap_horiz), onPressed: () => _showSourceSwitchDialog(playlist, tracks), tooltip: '换源'),
-          if (tracks.isNotEmpty) IconButton(icon: const Icon(Icons.edit), onPressed: _toggleEditMode, tooltip: '批量管理'),
-          IconButton(
-            icon: const Icon(Icons.sync),
+          if (tracks.isNotEmpty) _buildExpressiveActionButton(icon: _isSearchMode ? Icons.search_off : Icons.search, onPressed: _toggleSearchMode, tooltip: _isSearchMode ? '关闭搜索' : '搜索歌曲', colorScheme: colorScheme),
+          if (tracks.isNotEmpty) _buildExpressiveActionButton(icon: Icons.swap_horiz, onPressed: () => _showSourceSwitchDialog(playlist, tracks), tooltip: '换源', colorScheme: colorScheme),
+          if (tracks.isNotEmpty) _buildExpressiveActionButton(icon: Icons.edit, onPressed: _toggleEditMode, tooltip: '批量管理', colorScheme: colorScheme),
+          _buildExpressiveActionButton(
+            icon: Icons.sync,
             onPressed: () async {
               if (!_hasImportConfig(playlist)) {
                 _showUserNotification('请先在"导入管理"中绑定来源后再同步', severity: fluent.InfoBarSeverity.warning);
@@ -581,24 +622,89 @@ extension MyPageMaterialUI on _MyPageState {
               await _playlistService.loadPlaylistTracks(playlist.id);
             },
             tooltip: '同步',
+            colorScheme: colorScheme,
           ),
         ],
+        const SizedBox(width: 8),
       ],
+    );
+  }
+
+  Widget _buildExpressiveActionButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    required String tooltip,
+    required ColorScheme colorScheme,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: IconButton(
+        icon: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 20, color: colorScheme.onSurfaceVariant),
+        ),
+        onPressed: onPressed,
+        tooltip: tooltip,
+      ),
     );
   }
 
   Widget _buildMaterialDetailStatsCard(ColorScheme colorScheme, int count, {int? totalCount}) {
     final String countText = (totalCount != null && totalCount != count) ? '筛选出 $count / 共 $totalCount 首歌曲' : '共 $count 首歌曲';
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.primaryContainer.withOpacity(0.7),
+            colorScheme.primaryContainer.withOpacity(0.4),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.primary.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20.0),
         child: Row(
           children: [
-            Icon(Icons.music_note, size: 24, color: colorScheme.primary),
-            const SizedBox(width: 12),
-            Text(countText, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(Icons.music_note_rounded, size: 24, color: colorScheme.primary),
+            ),
+            const SizedBox(width: 16),
+            Text(
+              countText,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+              ),
+            ),
             const Spacer(),
-            if (count > 0) FilledButton.icon(onPressed: _playAll, icon: const Icon(Icons.play_arrow, size: 20), label: const Text('播放全部')),
+            if (count > 0)
+              FilledButton.icon(
+                onPressed: _playAll,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                icon: const Icon(Icons.play_arrow_rounded, size: 22),
+                label: const Text('播放全部', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
           ],
         ),
       ),
@@ -610,11 +716,33 @@ extension MyPageMaterialUI on _MyPageState {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.music_off, size: 64, color: colorScheme.onSurface.withOpacity(0.3)),
-          const SizedBox(height: 16),
-          Text('歌单为空', style: TextStyle(fontSize: 16, color: colorScheme.onSurface.withOpacity(0.6))),
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(32),
+            ),
+            child: Icon(Icons.music_off_rounded, size: 64, color: colorScheme.onSurface.withOpacity(0.4)),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            '歌单为空',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: colorScheme.onSurface.withOpacity(0.7),
+              letterSpacing: -0.3,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text('快去添加一些喜欢的歌曲吧', style: TextStyle(fontSize: 14, color: colorScheme.onSurface.withOpacity(0.5))),
+          Text(
+            '快去添加一些喜欢的歌曲吧',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurface.withOpacity(0.5),
+            ),
+          ),
         ],
       ),
     );
@@ -624,29 +752,133 @@ extension MyPageMaterialUI on _MyPageState {
     final trackKey = _getTrackKey(item);
     final isSelected = _selectedTrackIds.contains(trackKey);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      color: isSelected && _isEditMode ? colorScheme.primaryContainer.withOpacity(0.3) : null,
-      child: ListTile(
-        leading: _isEditMode
-            ? Checkbox(value: isSelected, onChanged: (_) => _toggleTrackSelection(item))
-            : Stack(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected && _isEditMode
+              ? colorScheme.primaryContainer.withOpacity(0.4)
+              : colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _isEditMode ? () => _toggleTrackSelection(item) : () => _playDetailTrack(index),
+            borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: CachedNetworkImage(
-                      imageUrl: item.picUrl, width: 50, height: 50, fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(width: 50, height: 50, color: colorScheme.surfaceContainerHighest),
-                      errorWidget: (_, __, ___) => Container(width: 50, height: 50, color: colorScheme.surfaceContainerHighest),
+                  if (_isEditMode)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Checkbox(
+                        value: isSelected,
+                        onChanged: (_) => _toggleTrackSelection(item),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                    )
+                  else
+                    Stack(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: CachedNetworkImage(
+                              imageUrl: item.picUrl,
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Container(
+                                width: 60,
+                                height: 60,
+                                color: colorScheme.surfaceContainerHighest,
+                              ),
+                              errorWidget: (_, __, ___) => Container(
+                                width: 60,
+                                height: 60,
+                                color: colorScheme.surfaceContainerHighest,
+                                child: Icon(Icons.music_note, color: colorScheme.onSurfaceVariant),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(8),
+                                bottomRight: Radius.circular(16),
+                              ),
+                            ),
+                            child: Text(
+                              '#${index + 1}',
+                              style: TextStyle(
+                                color: colorScheme.onPrimary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${item.artists} • ${item.album}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colorScheme.onSurfaceVariant.withOpacity(0.8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Positioned(bottom: 0, right: 0, child: Container(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2), decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: const BorderRadius.only(topLeft: Radius.circular(4))), child: Text('#${index + 1}', style: TextStyle(color: colorScheme.onPrimaryContainer, fontSize: 10, fontWeight: FontWeight.bold)))),
                 ],
               ),
-        title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text('${item.artists} • ${item.album}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
-        trailing: _isEditMode ? null : const SizedBox.shrink(),
-        onTap: _isEditMode ? () => _toggleTrackSelection(item) : () => _playDetailTrack(index),
+            ),
+          ),
+        ),
       ),
     );
   }

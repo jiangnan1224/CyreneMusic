@@ -1322,7 +1322,7 @@ class _PlaylistsPageState extends State<PlaylistsPage>
     );
 
     if (confirmed == true && _selectedPlaylist != null) {
-      await _playlistService.removeTrackFromPlaylist(
+      await _playlistService.removePlaylistTrack(
           _selectedPlaylist!.id, track);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

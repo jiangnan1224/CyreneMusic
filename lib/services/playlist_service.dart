@@ -651,8 +651,8 @@ class PlaylistService extends ChangeNotifier {
     }
   }
 
-  /// 从歌单删除歌曲
-  Future<bool> removeTrackFromPlaylist(int playlistId, PlaylistTrack track) async {
+  /// 从歌单删除歌曲（通过 trackId 和 source 字符串）
+  Future<bool> removeTrackFromPlaylist(int playlistId, String trackId, String source) async {
     if (!AuthService().isLoggedIn) {
       print('⚠️ [PlaylistService] 未登录，无法删除歌曲');
       return false;
@@ -664,12 +664,11 @@ class PlaylistService extends ChangeNotifier {
       if (token == null) {
         throw Exception('无有效令牌');
       }
-      final source = track.source.toString().split('.').last;
       
       // 诊断日志
       print('🗑️ [PlaylistService] 准备删除歌曲:');
       print('   PlaylistId: $playlistId');
-      print('   TrackId: ${track.trackId}');
+      print('   TrackId: $trackId');
       print('   Source: $source');
       print('   URL: $baseUrl/playlists/$playlistId/tracks/remove');
 
@@ -681,7 +680,7 @@ class PlaylistService extends ChangeNotifier {
           'Authorization': 'Bearer $token',
         },
         body: json.encode({
-          'trackId': track.trackId,
+          'trackId': trackId,
           'source': source,
         }),
       ).timeout(
@@ -716,7 +715,7 @@ class PlaylistService extends ChangeNotifier {
           // 从当前列表删除
           if (_currentPlaylistId == playlistId) {
             _currentTracks.removeWhere((t) => 
-              t.trackId == track.trackId && t.source == track.source
+              t.trackId == trackId && t.source.name == source
             );
           }
 
@@ -737,6 +736,12 @@ class PlaylistService extends ChangeNotifier {
       print('❌ [PlaylistService] 删除歌曲失败: $e');
       return false;
     }
+  }
+
+  /// 从歌单删除歌曲（通过 PlaylistTrack 对象）
+  Future<bool> removePlaylistTrack(int playlistId, PlaylistTrack track) async {
+    final source = track.source.toString().split('.').last;
+    return removeTrackFromPlaylist(playlistId, track.trackId, source);
   }
 
   /// 批量删除歌曲

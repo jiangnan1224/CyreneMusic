@@ -31,6 +31,11 @@ class _MobilePlayerFluidCloudSongWikiPanelState extends State<MobilePlayerFluidC
   
   bool _loading = true;
   dynamic _lastSongId;
+  
+  // 歌单详情相关 (内嵌子视图)
+  int? _selectedPlaylistId;
+  NeteasePlaylistDetail? _playlistDetail;
+  bool _loadingPlaylist = false;
 
   @override
   void initState() {
@@ -415,7 +420,16 @@ class _MobilePlayerFluidCloudSongWikiPanelState extends State<MobilePlayerFluidC
       );
     }
 
-    return _buildMainContentView();
+    // 使用 AnimatedSwitcher 在主内容和歌单详情之间切换
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (child, animation) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+      child: _selectedPlaylistId != null
+          ? _buildPlaylistDetailView()
+          : _buildMainContentView(),
+    );
   }
 
   Widget _buildMainContentView() {
@@ -849,7 +863,8 @@ class _MobilePlayerFluidCloudSongWikiPanelState extends State<MobilePlayerFluidC
       source: MusicSource.netease,
     );
     
-    PlaylistQueueService().playTrack(track);
+    // 使用 PlayerService 直接播放，与桌面端行为一致
+    PlayerService().playTrack(track);
   }
 
   Widget _buildArtistSongItem(Track track) {
@@ -924,6 +939,7 @@ class _MobilePlayerFluidCloudSongWikiPanelState extends State<MobilePlayerFluidC
     }
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => _openPlaylist(playlist),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1007,208 +1023,248 @@ class _MobilePlayerFluidCloudSongWikiPanelState extends State<MobilePlayerFluidC
     final id = int.tryParse(playlistId);
     if (id == null) return;
     
-    // 移动端跳转到歌单详情页
+    // 立即切换到歌单详情视图，显示加载状态
+    setState(() {
+      _selectedPlaylistId = id;
+      _loadingPlaylist = true;
+      _playlistDetail = null;
+    });
+    
+    // 异步加载歌单详情
     try {
       final detail = await NeteaseDiscoverService().fetchPlaylistDetail(id);
-      if (detail != null && mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => _MobilePlaylistDetailPage(detail: detail),
-          ),
-        );
+      if (mounted && _selectedPlaylistId == id) {
+        setState(() {
+          _playlistDetail = detail;
+          _loadingPlaylist = false;
+        });
       }
     } catch (e) {
       debugPrint('加载歌单详情失败: $e');
+      if (mounted && _selectedPlaylistId == id) {
+        setState(() => _loadingPlaylist = false);
+      }
     }
   }
-}
 
-/// 移动端简易歌单详情页
-class _MobilePlaylistDetailPage extends StatelessWidget {
-  final NeteasePlaylistDetail detail;
-  
-  const _MobilePlaylistDetailPage({required this.detail});
+  /// 内嵌歌单详情视图
+  Widget _buildPlaylistDetailView() {
+    // 显示加载状态
+    if (_loadingPlaylist) {
+      return const Center(
+        key: ValueKey('playlist_loading'),
+        child: CupertinoActivityIndicator(radius: 14, color: Colors.white70),
+      );
+    }
 
-  @override
-  Widget build(BuildContext context) {
+    // 加载失败
+    if (_playlistDetail == null) {
+      return Center(
+        key: const ValueKey('playlist_error'),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, color: Colors.white.withOpacity(0.5), size: 40),
+            const SizedBox(height: 12),
+            Text('加载失败', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14)),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () => setState(() {
+                _selectedPlaylistId = null;
+                _playlistDetail = null;
+              }),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text('返回', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final detail = _playlistDetail!;
     final playCountText = detail.playCount >= 10000
         ? '${(detail.playCount / 10000).toStringAsFixed(1)}万'
         : detail.playCount.toString();
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: CustomScrollView(
-        slivers: [
-          // 顶部导航栏
-          SliverAppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            pinned: true,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            title: Text(
-              detail.name,
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          
-          // 歌单信息头部
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
+    return ListView(
+      key: ValueKey('playlist_${detail.id}'),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      children: [
+        // 返回按钮
+        Align(
+          alignment: Alignment.centerLeft,
+          child: GestureDetector(
+            onTap: () => setState(() {
+              _selectedPlaylistId = null;
+              _playlistDetail = null;
+            }),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 封面
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: CachedNetworkImage(
-                      imageUrl: detail.coverImgUrl.replaceAll('http://', 'https://'),
-                      width: 110,
-                      height: 110,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // 信息
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          detail.name,
-                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          detail.creator,
-                          style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.play_circle_outline, color: Colors.white.withOpacity(0.5), size: 14),
-                            const SizedBox(width: 4),
-                            Text(playCountText, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11)),
-                            const SizedBox(width: 12),
-                            Icon(Icons.music_note_outlined, color: Colors.white.withOpacity(0.5), size: 14),
-                            const SizedBox(width: 4),
-                            Text('${detail.trackCount}首', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                  Icon(Icons.arrow_back_ios, color: Colors.white.withOpacity(0.7), size: 14),
+                  const SizedBox(width: 4),
+                  Text('歌曲信息', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
                 ],
               ),
             ),
           ),
-          
-          // 播放全部按钮
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: GestureDetector(
-                onTap: () {
-                  if (detail.tracks.isNotEmpty) {
-                    PlaylistQueueService().setQueue(detail.tracks, 0, QueueSource.playlist);
-                    PlayerService().playTrack(detail.tracks[0], fromPlaylist: true);
-                    Navigator.of(context).pop();
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  alignment: Alignment.center,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.play_arrow_rounded, color: Colors.white.withOpacity(0.9), size: 22),
-                      const SizedBox(width: 6),
-                      Text(
-                        '播放全部',
-                        style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
+        ),
+        const SizedBox(height: 20),
+        
+        // 歌单封面和信息
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: CachedNetworkImage(
+                imageUrl: detail.coverImgUrl.replaceAll('http://', 'https://'),
+                width: 100,
+                height: 100,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(
+                  color: Colors.white.withOpacity(0.1),
+                  child: Icon(Icons.queue_music, color: Colors.white.withOpacity(0.3), size: 36),
                 ),
               ),
             ),
-          ),
-          
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
-          
-          // 歌曲列表
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final track = detail.tracks[index];
-                return GestureDetector(
-                  onTap: () {
-                    PlaylistQueueService().setQueue(detail.tracks, index, QueueSource.playlist);
-                    PlayerService().playTrack(track, fromPlaylist: true);
-                    Navigator.of(context).pop();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    child: Row(
-                      children: [
-                        // 封面
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: CachedNetworkImage(
-                            imageUrl: track.picUrl,
-                            width: 44,
-                            height: 44,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => Container(
-                              color: Colors.white.withOpacity(0.1),
-                              child: Icon(Icons.music_note, color: Colors.white.withOpacity(0.3), size: 18),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // 信息
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                track.name,
-                                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                track.artists,
-                                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    detail.name,
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                );
-              },
-              childCount: detail.tracks.length > 50 ? 50 : detail.tracks.length,
+                  const SizedBox(height: 6),
+                  Text(
+                    detail.creator,
+                    style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.play_circle_outline, color: Colors.white.withOpacity(0.5), size: 13),
+                      const SizedBox(width: 3),
+                      Text(playCountText, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
+                      const SizedBox(width: 10),
+                      Icon(Icons.music_note_outlined, color: Colors.white.withOpacity(0.5), size: 13),
+                      const SizedBox(width: 3),
+                      Text('${detail.trackCount}首', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        
+        const SizedBox(height: 20),
+        
+        // 播放全部按钮
+        GestureDetector(
+          onTap: () {
+            if (detail.tracks.isNotEmpty) {
+              PlaylistQueueService().setQueue(detail.tracks, 0, QueueSource.playlist);
+              PlayerService().playTrack(detail.tracks[0], fromPlaylist: true);
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.play_arrow_rounded, color: Colors.white.withOpacity(0.85), size: 20),
+                const SizedBox(width: 6),
+                Text(
+                  '播放全部',
+                  style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ],
             ),
           ),
-          
-          const SliverToBoxAdapter(child: SizedBox(height: 60)),
-        ],
+        ),
+        
+        const SizedBox(height: 20),
+        
+        // 歌曲列表
+        ...detail.tracks.take(50).map((track) => _buildPlaylistTrackTile(track, detail.tracks)).toList(),
+        
+        const SizedBox(height: 60),
+      ],
+    );
+  }
+
+  /// 歌单内歌曲卡片
+  Widget _buildPlaylistTrackTile(Track track, List<Track> allTracks) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        final index = allTracks.indexOf(track);
+        final startIndex = index >= 0 ? index : 0;
+        PlaylistQueueService().setQueue(allTracks, startIndex, QueueSource.playlist);
+        PlayerService().playTrack(allTracks[startIndex], fromPlaylist: true);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: CachedNetworkImage(
+                imageUrl: track.picUrl,
+                width: 42,
+                height: 42,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(
+                  color: Colors.white.withOpacity(0.1),
+                  child: Icon(Icons.music_note, color: Colors.white.withOpacity(0.3), size: 16),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    track.name,
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    track.artists,
+                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

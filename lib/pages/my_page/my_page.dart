@@ -563,7 +563,7 @@ class _MyPageState extends State<MyPage> {
 
     if (confirmed != true) return;
 
-    final success = await _playlistService.removeTrackFromPlaylist(
+    final success = await _playlistService.removePlaylistTrack(
       _selectedPlaylist!.id,
       track,
     );
@@ -753,7 +753,7 @@ class _MyPageState extends State<MyPage> {
       final newTrack = pair.value;
 
       try {
-        final removeSuccess = await _playlistService.removeTrackFromPlaylist(playlist.id, oldTrack);
+        final removeSuccess = await _playlistService.removePlaylistTrack(playlist.id, oldTrack);
         if (removeSuccess) {
           final addSuccess = await _playlistService.addTrackToPlaylist(playlist.id, newTrack);
           if (addSuccess) {
@@ -880,7 +880,7 @@ class _MyPageState extends State<MyPage> {
 
     if (confirmed != true) return;
 
-    final success = await _playlistService.removeTrackFromPlaylist(_selectedPlaylist!.id, track);
+    final success = await _playlistService.removePlaylistTrack(_selectedPlaylist!.id, track);
     _showCupertinoToast(success ? '已从歌单移除' : '移除失败');
   }
 

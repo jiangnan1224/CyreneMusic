@@ -244,7 +244,9 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
   Widget build(BuildContext context) {
     if (_isFirstBuild) {
       _isFirstBuild = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 延迟首次颜色提取，让路由动画先完成 (300ms + 100ms 缓冲)
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (!mounted) return;
         final backgroundType = PlayerBackgroundService().backgroundType;
         if (backgroundType == PlayerBackgroundType.dynamic) {
           _scheduleColorExtraction();
@@ -253,7 +255,7 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
         }
       });
     }
-    return _buildBackground();
+    return RepaintBoundary(child: _buildBackground());
   }
 
   /// 构建背景

@@ -1128,6 +1128,7 @@ class _FavoriteButtonState extends State<_FavoriteButton> {
   bool _isInPlaylist = false;
   bool _isLoading = true;
   List<String> _playlistNames = [];
+  List<int> _playlistIds = [];
 
   @override
   void initState() {
@@ -1157,9 +1158,78 @@ class _FavoriteButtonState extends State<_FavoriteButton> {
       setState(() {
         _isInPlaylist = result.inPlaylist;
         _playlistNames = result.playlistNames;
+        _playlistIds = result.playlistIds;
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _removeFromPlaylists() async {
+    if (_playlistIds.isEmpty) return;
+    
+    final playlistService = PlaylistService();
+    
+    for (final playlistId in _playlistIds) {
+      await playlistService.removeTrackFromPlaylist(
+        playlistId,
+        widget.track.id.toString(),
+        widget.track.source.name,
+      );
+    }
+    
+    // 刷新状态
+    _checkIfInPlaylist();
+  }
+
+  void _showManageMenu(BuildContext context, Offset position) {
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromCenter(center: position, width: 0, height: 0),
+        Offset.zero & overlay.size,
+      ),
+      color: Colors.grey[850],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      items: [
+        PopupMenuItem<String>(
+          value: 'info',
+          enabled: false,
+          child: Text(
+            '已收藏到: ${_playlistNames.join(", ")}',
+            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'remove',
+          child: Row(
+            children: [
+              Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 18),
+              const SizedBox(width: 8),
+              const Text('从所有歌单移除', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'add',
+          child: Row(
+            children: [
+              Icon(Icons.playlist_add, color: Colors.white70, size: 18),
+              const SizedBox(width: 8),
+              const Text('添加到其他歌单', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'remove') {
+        _removeFromPlaylists();
+      } else if (value == 'add') {
+        PlayerDialogs.showAddToPlaylist(context, widget.track);
+      }
+    });
   }
 
   @override
@@ -1182,20 +1252,26 @@ class _FavoriteButtonState extends State<_FavoriteButton> {
         ? '已收藏到: ${_playlistNames.join(", ")}' 
         : '添加到歌单';
 
-    return IconButton(
-      icon: Icon(
-        _isInPlaylist ? Icons.favorite : Icons.favorite_border,
-        color: _isInPlaylist ? Colors.redAccent : Colors.white.withOpacity(0.7),
-        size: 26,
-      ),
-      onPressed: () {
-        PlayerDialogs.showAddToPlaylist(context, widget.track);
+    return GestureDetector(
+      onTapDown: (details) {
+        if (_isInPlaylist) {
+          _showManageMenu(context, details.globalPosition);
+        } else {
+          PlayerDialogs.showAddToPlaylist(context, widget.track);
+        }
       },
-      tooltip: tooltip,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(
-        minWidth: 32,
-        minHeight: 32,
+      child: Tooltip(
+        message: tooltip,
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          child: Icon(
+            _isInPlaylist ? Icons.favorite : Icons.favorite_border,
+            color: _isInPlaylist ? Colors.redAccent : Colors.white.withOpacity(0.7),
+            size: 26,
+          ),
+        ),
       ),
     );
   }
