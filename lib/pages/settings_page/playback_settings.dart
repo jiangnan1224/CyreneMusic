@@ -14,7 +14,14 @@ import 'equalizer_page.dart';
 
 /// 播放设置组件
 class PlaybackSettings extends StatelessWidget {
-  const PlaybackSettings({super.key});
+  final VoidCallback? onEqualizerTap;
+  final bool isSubPage;
+
+  const PlaybackSettings({
+    super.key,
+    this.onEqualizerTap,
+    this.isSubPage = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -38,13 +45,14 @@ class PlaybackSettings extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _showAudioQualityDialogFluent(context),
               ),
-              FluentSettingsTile(
-                icon: Icons.graphic_eq,
-                title: '均衡器',
-                subtitle: '调节音频频率响应',
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(context, fluent_ui.FluentPageRoute(builder: (_) => const EqualizerPage())),
-              ),
+              if (!isSubPage) // 如果已经在二级页面列表中，不显示跳转按钮，或者由外部处理
+                FluentSettingsTile(
+                  icon: Icons.graphic_eq,
+                  title: '均衡器',
+                  subtitle: '调节音频频率响应',
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: onEqualizerTap ?? () => Navigator.push(context, fluent_ui.FluentPageRoute(builder: (_) => const EqualizerPage())),
+                ),
             ],
           );
         }
@@ -53,7 +61,7 @@ class PlaybackSettings extends StatelessWidget {
           return Column(
             children: [
               _buildCupertinoUI(context, qualityService),
-              _buildCupertinoEqualizerLink(context),
+              if (!isSubPage) _buildCupertinoEqualizerLink(context),
             ],
           );
         }
@@ -67,13 +75,14 @@ class PlaybackSettings extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _showAudioQualityDialog(context),
             ),
-            MD3SettingsTile(
-              leading: const Icon(Icons.graphic_eq),
-              title: '均衡器',
-              subtitle: '自定义音效',
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EqualizerPage())),
-            ),
+            if (!isSubPage)
+              MD3SettingsTile(
+                leading: const Icon(Icons.graphic_eq),
+                title: '均衡器',
+                subtitle: '自定义音效',
+                trailing: const Icon(Icons.chevron_right),
+                onTap: onEqualizerTap ?? () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EqualizerPage())),
+              ),
           ],
         );
       },
@@ -99,7 +108,7 @@ class PlaybackSettings extends StatelessWidget {
       title: '均衡器',
       subtitle: '调节音频效果',
       showChevron: true,
-      onTap: () => Navigator.push(context, CupertinoPageRoute(builder: (_) => const EqualizerPage())),
+      onTap: onEqualizerTap ?? () => Navigator.push(context, CupertinoPageRoute(builder: (_) => const EqualizerPage())),
     );
   }
 

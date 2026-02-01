@@ -26,6 +26,12 @@ class _VirtualLyricEntry {
   });
 }
 
+// --- 动画常量定义 ---
+const Curve kSineElastic = Cubic(0.44, 0.05, 0.55, 0.95);
+const Duration kScrollDuration = Duration(milliseconds: 800);
+const Duration kShrinkDelay = Duration(milliseconds: 400); 
+const Duration kShrinkDuration = Duration(milliseconds: 500);
+
 /// 移动端流体云歌词面板 - 由桌面端 PlayerFluidCloudLyricsPanel 复制而来，用于独立适配
 class MobilePlayerFluidCloudLyricsPanel extends StatefulWidget {
   final List<LyricLine> lyrics;
@@ -45,12 +51,12 @@ class MobilePlayerFluidCloudLyricsPanel extends StatefulWidget {
   State<MobilePlayerFluidCloudLyricsPanel> createState() => _MobilePlayerFluidCloudLyricsPanelState();
 }
 
-class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidCloudLyricsPanel>
-    with TickerProviderStateMixin {
+class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidCloudLyricsPanel> {
   
   // 核心变量
   final double _lineHeight = 80.0; 
-  static const double _maxActiveScale = 1.15; // 最大活跃缩放比例
+
+  static const double _maxActiveScale = 1.0; // 1.1 -> 1.0 No magnification
   
   // 滚动/拖拽相关
   double _dragOffset = 0.0;
@@ -63,21 +69,10 @@ class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidClo
   String? _lastFontFamily;
   bool? _lastShowTranslation;
 
-  // Ticker 用于跟踪播放位置（动态触发占位符）
-  late Ticker _ticker;
+  // Ticker Removed
   
   @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker((_) {
-      if (mounted) setState(() {});
-    });
-    _ticker.start();
-  }
-
-  @override
   void dispose() {
-    _ticker.dispose();
     _dragResetTimer?.cancel();
     super.dispose();
   }
@@ -271,9 +266,7 @@ class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidClo
 
   /// 内部辅助方法：计算同步缩放值（用于偏移量预计算）
   double _getScaleSync(int diff) {
-    if (diff == 0) return _maxActiveScale;
-    if (diff.abs() < 3) return 1.0 - diff.abs() * 0.1;
-    return 0.7;
+    return 1.0;
   }
 
   Widget _buildVirtualItem(_VirtualLyricEntry item, int index, int activeIndex, double centerYOffset, double relativeOffset, double itemHeight, double layoutWidth, double baseHeight, Duration currentPos) {
@@ -421,9 +414,7 @@ class _MobilePlayerFluidCloudLyricsPanelState extends State<MobilePlayerFluidClo
   }
 
   double _getTargetScale(int diff) {
-    if (diff == 0) return _maxActiveScale;
-    if (diff.abs() < 3) return 1.0 - diff.abs() * 0.1;
-    return 0.7;
+    return 1.0;
   }
 
   Widget _buildLyricItem(int index, double centerYOffset, double relativeOffset, double itemHeight, double layoutWidth, double baseHeight) {
@@ -539,18 +530,23 @@ class _ElasticLyricLineState extends State<_ElasticLyricLine> with TickerProvide
   late double _scale;
   late double _opacity;
   late double _blur;
+  late Color _textColor; // 新增文本颜色状态
   
   AnimationController? _controller;
   Animation<double>? _yAnim;
   Animation<double>? _scaleAnim;
   Animation<double>? _opacityAnim;
   Animation<double>? _blurAnim;
+  Animation<Color?>? _colorAnim; // 新增颜色动画
   
   Timer? _delayTimer;
 
   static const Curve elasticCurve = Cubic(0.34, 1.56, 0.64, 1.0);
   static const Duration animDuration = Duration(milliseconds: 800);
   
+  // 记录上一帧的状态，用于判断 Active -> Passed
+  bool _wasActive = false;
+
   @override
   void initState() {
     super.initState();
@@ -558,6 +554,8 @@ class _ElasticLyricLineState extends State<_ElasticLyricLine> with TickerProvide
     _scale = widget.targetScale;
     _opacity = widget.targetOpacity;
     _blur = widget.targetBlur;
+    _wasActive = widget.isActive;
+    _textColor = widget.isActive ? Colors.white : Colors.white.withOpacity(0.3);
   }
 
   // --- 涟漪效果相关 ---
@@ -596,8 +594,9 @@ class _ElasticLyricLineState extends State<_ElasticLyricLine> with TickerProvide
     bool blurChanged = (oldWidget.targetBlur - widget.targetBlur).abs() > 0.1;
     
     if (positionChanged || scaleChanged || opacityChanged || blurChanged) {
-      _startAnimation();
+      _startAnimation(oldWidget);
     }
+    _wasActive = widget.isActive;
   }
 
   @override
@@ -607,7 +606,7 @@ class _ElasticLyricLineState extends State<_ElasticLyricLine> with TickerProvide
     super.dispose();
   }
 
-  void _startAnimation() {
+  void _startAnimation(covariant _ElasticLyricLine oldWidget) {
     _delayTimer?.cancel();
     
     if (widget.isDragging) {
@@ -617,6 +616,7 @@ class _ElasticLyricLineState extends State<_ElasticLyricLine> with TickerProvide
         _scale = widget.targetScale;
         _opacity = widget.targetOpacity;
         _blur = widget.targetBlur;
+        _textColor = widget.isActive ? Colors.white : Colors.white.withOpacity(0.3);
       });
       return;
     }
@@ -624,33 +624,47 @@ class _ElasticLyricLineState extends State<_ElasticLyricLine> with TickerProvide
     void play() {
       if (!mounted) return;
       
-      if (_controller == null) {
-        _controller = AnimationController(
-          vsync: this,
-          duration: animDuration,
-        );
-        _controller!.addListener(() {
-          if (!mounted) return;
-          setState(() {
-            _y = _yAnim!.value;
-            _scale = _scaleAnim!.value;
-            _opacity = _opacityAnim!.value;
-            _blur = _blurAnim!.value;
-          });
-        });
-      }
+      // 创建或重置控制器
+      _controller?.dispose();
+      _controller = AnimationController(
+        vsync: this,
+        duration: animDuration, // 直接使用固定时长 (800ms)
+      );
 
+      _controller!.addListener(() {
+        if (!mounted) return;
+        setState(() {
+          _y = _yAnim!.value;
+          _scale = _scaleAnim!.value;
+          _opacity = _opacityAnim!.value;
+          _blur = _blurAnim!.value;
+          if (_colorAnim != null) _textColor = _colorAnim!.value ?? _textColor;
+        });
+      });
+      
+      // 计算目标颜色
+      final targetColor = widget.isActive ? Colors.white : Colors.white.withOpacity(0.3);
+
+      // 所有属性同步动画
       _yAnim = Tween<double>(begin: _y, end: widget.targetY).animate(
-        CurvedAnimation(parent: _controller!, curve: elasticCurve)
+        CurvedAnimation(parent: _controller!, curve: kSineElastic)
       );
+      
       _scaleAnim = Tween<double>(begin: _scale, end: widget.targetScale).animate(
-         CurvedAnimation(parent: _controller!, curve: elasticCurve)
+         CurvedAnimation(parent: _controller!, curve: kSineElastic)
       );
+
+      // Opacity/Blur/Color 使用 Linear/Ease (匹配 HTML behavior)
       _opacityAnim = Tween<double>(begin: _opacity, end: widget.targetOpacity).animate(
-        CurvedAnimation(parent: _controller!, curve: Curves.ease)
+        CurvedAnimation(parent: _controller!, curve: Curves.linear)
       );
+      
       _blurAnim = Tween<double>(begin: _blur, end: widget.targetBlur).animate(
-        CurvedAnimation(parent: _controller!, curve: Curves.ease)
+        CurvedAnimation(parent: _controller!, curve: Curves.linear)
+      );
+
+      _colorAnim = ColorTween(begin: _textColor, end: targetColor).animate(
+        CurvedAnimation(parent: _controller!, curve: Curves.linear)
       );
 
       _controller!.forward(from: 0.0);
@@ -748,12 +762,8 @@ class _ElasticLyricLineState extends State<_ElasticLyricLine> with TickerProvide
     final fontFamily = LyricFontService().currentFontFamily ?? 'Microsoft YaHei';
     final double textFontSize = styleService.fontSize * 0.9;
 
-    Color textColor;
-    if (widget.isActive) {
-      textColor = Colors.white;
-    } else {
-      textColor = Colors.white.withOpacity(0.3); 
-    }
+    // 使用动画颜色
+    Color textColor = _textColor;
     
     Widget textWidget;
     if (widget.isActive && widget.lyric.hasWordByWord) {
@@ -766,7 +776,7 @@ class _ElasticLyricLineState extends State<_ElasticLyricLine> with TickerProvide
              fontFamily: fontFamily,
              fontSize: textFontSize, 
              fontWeight: FontWeight.w800,
-             color: Colors.white,
+             color: textColor, // 这里也使用动画颜色作为底色
              height: 1.3,
         ),
         maxWidth: widget.layoutWidth,
