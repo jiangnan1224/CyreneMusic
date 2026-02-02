@@ -140,6 +140,8 @@ class _MainLayoutState extends State<MainLayout>
     AuthService().addListener(_onAuthChanged);
     // 监听布局偏好变化
     LayoutPreferenceService().addListener(_onLayoutPreferenceChanged);
+    // 监听页面可见性通知器（用于跨组件切换 Tab）
+    PageVisibilityNotifier().addListener(_onPageVisibilityNotifierChanged);
     // 监听开发者模式变化
     DeveloperModeService().addListener(_onDeveloperModeChanged);
     // 监听主题变化（包括移动端主题框架切换）
@@ -156,12 +158,17 @@ class _MainLayoutState extends State<MainLayout>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AuthService().validateToken();
     });
+    
+    // 初始化 PageVisibilityNotifier 状态与当前页面一致
+    // 避免因为热重启或某些情况导致状态不同步（Notifier 是单例可能保留了旧状态）
+    PageVisibilityNotifier().setCurrentPage(_selectedIndex);
   }
 
   @override
   void dispose() {
     AuthService().removeListener(_onAuthChanged);
     LayoutPreferenceService().removeListener(_onLayoutPreferenceChanged);
+    PageVisibilityNotifier().removeListener(_onPageVisibilityNotifierChanged);
     DeveloperModeService().removeListener(_onDeveloperModeChanged);
     ThemeManager().removeListener(_onThemeChanged);
     super.dispose();
@@ -197,6 +204,22 @@ class _MainLayoutState extends State<MainLayout>
           setState(() {});
         }
       });
+    }
+  }
+
+  void _onPageVisibilityNotifierChanged() {
+    if (mounted) {
+      final newIndex = PageVisibilityNotifier().currentPageIndex;
+      if (_selectedIndex != newIndex && newIndex < _pages.length) {
+        // 使用 addPostFrameCallback 避免在构建期间调用 setState
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _selectedIndex = newIndex;
+            });
+          }
+        });
+      }
     }
   }
 

@@ -40,7 +40,6 @@ enum SettingsSubPage {
   lyric,
   audioSource,
   about,
-  equalizer,
   labFunctions,
 }
 
@@ -221,9 +220,6 @@ class _SettingsPageState extends State<SettingsPage> {
       case SettingsSubPage.about:
         content = AboutSettingsContent(onBack: () => Navigator.pop(context), embed: true);
         title = '关于';
-      case SettingsSubPage.equalizer:
-        content = EqualizerContent(onBack: () => Navigator.pop(context), embed: true);
-        title = '均衡器';
       case SettingsSubPage.labFunctions:
         content = LabFunctionsContent(onBack: () => Navigator.pop(context), embed: true);
         title = '实验室功能';
@@ -359,7 +355,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     const SizedBox(height: 12),
                     
                     // 播放设置
-                    PlaybackSettings(onEqualizerTap: () => openSubPage(SettingsSubPage.equalizer)),
+                    const PlaybackSettings(),
                     const SizedBox(height: 12),
                     
                     // 搜索设置
@@ -428,8 +424,6 @@ class _SettingsPageState extends State<SettingsPage> {
         return '音源设置';
       case SettingsSubPage.about:
         return '关于';
-      case SettingsSubPage.equalizer:
-        return '均衡器';
       case SettingsSubPage.labFunctions:
         return '实验室功能';
       case SettingsSubPage.none:
@@ -449,8 +443,6 @@ class _SettingsPageState extends State<SettingsPage> {
         return AudioSourceSettingsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.about:
         return AboutSettingsContent(onBack: closeSubPage, embed: true);
-      case SettingsSubPage.equalizer:
-        return EqualizerContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.labFunctions:
         return LabFunctionsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.none:
@@ -572,16 +564,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 isDark: isDark,
                 header: '播放',
                 children: [
-                  const PlaybackSettings(isSubPage: true), // 在主页列表显示，不传递回调则降级
-                  _buildCupertinoSettingsItem(
-                    context,
-                    isDark: isDark,
-                    icon: CupertinoIcons.waveform,
-                    iconColor: const Color(0xFF007AFF),
-                    title: '均衡器',
-                    subtitle: '调节音频效果',
-                    onTap: () => openSubPage(SettingsSubPage.equalizer),
-                  ),
                   const SearchSettings(),
                 ],
               ),
@@ -811,8 +793,6 @@ class _SettingsPageState extends State<SettingsPage> {
         return AudioSourceSettingsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.about:
         return AboutSettingsContent(onBack: closeSubPage, embed: true);
-      case SettingsSubPage.equalizer:
-        return EqualizerContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.labFunctions:
         return LabFunctionsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.none:
@@ -893,7 +873,7 @@ class _SettingsPageState extends State<SettingsPage> {
         LyricSettings(onTap: () => openSubPage(SettingsSubPage.lyric)),
         const SizedBox(height: 16),
         
-        PlaybackSettings(onEqualizerTap: () => openSubPage(SettingsSubPage.equalizer)),
+        const PlaybackSettings(),
         const SizedBox(height: 16),
         
         const SearchSettings(),
@@ -923,8 +903,6 @@ class _SettingsPageState extends State<SettingsPage> {
         return AudioSourceSettingsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.about:
         return AboutSettingsContent(onBack: closeSubPage, embed: true);
-      case SettingsSubPage.equalizer:
-        return EqualizerContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.labFunctions:
         return LabFunctionsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.none:
@@ -944,7 +922,6 @@ class _SettingsPageState extends State<SettingsPage> {
       case SettingsSubPage.lyric: pageName = '歌词'; break;
       case SettingsSubPage.audioSource: pageName = '音源设置'; break;
       case SettingsSubPage.about: pageName = '关于'; break;
-      case SettingsSubPage.equalizer: pageName = '均衡器'; break;
       case SettingsSubPage.labFunctions: pageName = '实验室功能'; break;
       case SettingsSubPage.none: return const Text('设置');
     }

@@ -2007,80 +2007,56 @@ class _HomePageState extends State<HomePage>
 
   /// 准备“猜你喜欢”的 Future
   void _prepareGuessYouLikeFuture() {
-    if (AuthService().isLoggedIn) {
-      _guessYouLikeFuture = _fetchRandomTracksFromPlaylists();
-    } else {
-      _guessYouLikeFuture = null;
-    }
+    _guessYouLikeFuture = _fetchRandomTracksFromToplists();
   }
 
-  /// 从多个歌单中获取随机歌曲
-  Future<List<Track>> _fetchRandomTracksFromPlaylists() async {
-    final String baseUrl = UrlService().baseUrl;
-    final String? token = AuthService().token;
-    if (token == null) throw Exception('未登录');
-
-    // 1. 获取所有歌单
-    final playlistsResponse = await http.get(
-      Uri.parse('$baseUrl/playlists'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-
-    if (playlistsResponse.statusCode != 200) {
-      throw Exception('获取歌单列表失败');
+  /// 从榜单中获取随机歌曲
+  Future<List<Track>> _fetchRandomTracksFromToplists() async {
+    // 等待一小段时间确保榜单数据已加载（如果是首次启动）
+    if (MusicService().toplists.isEmpty) {
+      await Future.delayed(const Duration(seconds: 1));
+    }
+    
+    final toplists = MusicService().toplists;
+    if (toplists.isEmpty) {
+      // 如果还没有榜单数据，尝试刷新一次
+      await MusicService().refreshToplists();
+      if (MusicService().toplists.isEmpty) {
+        return []; // 仍然没有数据，返回空
+      }
     }
 
-    final playlistsBody = json.decode(utf8.decode(playlistsResponse.bodyBytes));
-    if (playlistsBody['status'] != 200) {
-      throw Exception(playlistsBody['message'] ?? '获取歌单列表失败');
+    // 收集所有榜单的前10首歌曲作为候选池
+    final List<Track> candidates = [];
+    
+    // 如果榜单数据中已经包含了 tracks (Track list)，直接使用
+    // 注意：Toplist 模型中包含 tracks 字段，是 ToplistTrack 类型
+    for (final toplist in MusicService().toplists) {
+      if (toplist.tracks.isNotEmpty) {
+        candidates.addAll(toplist.tracks);
+      }
     }
 
-    final List<dynamic> playlistsJson = playlistsBody['playlists'] ?? [];
-    final List<Playlist> allPlaylists = playlistsJson
-        .map((p) => Playlist.fromJson(p))
-        .toList();
-
-    // 2. 筛选非空歌单
-    final nonEmptyPlaylists = allPlaylists
-        .where((p) => p.trackCount > 0)
-        .toList();
-    if (nonEmptyPlaylists.isEmpty) {
-      throw Exception('没有包含歌曲的歌单');
+    if (candidates.isEmpty) {
+       return [];
     }
 
-    // 3. 随机选择一个歌单并获取其歌曲
-    final randomPlaylist =
-        nonEmptyPlaylists[Random().nextInt(nonEmptyPlaylists.length)];
-    final tracksResponse = await http.get(
-      Uri.parse('$baseUrl/playlists/${randomPlaylist.id}/tracks'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-
-    if (tracksResponse.statusCode != 200) {
-      throw Exception('获取歌曲失败');
+    // 随机挑选3首
+    final random = Random();
+    final List<Track> selected = [];
+    final count = min(3, candidates.length);
+    
+    // 简单的随机不重复选择
+    final List<int> selectedIndices = [];
+    while (selected.length < count) {
+      final index = random.nextInt(candidates.length);
+      if (!selectedIndices.contains(index)) {
+        selectedIndices.add(index);
+        selected.add(candidates[index]);
+      }
     }
-
-    final tracksBody = json.decode(utf8.decode(tracksResponse.bodyBytes));
-    if (tracksBody['status'] != 200) {
-      throw Exception(tracksBody['message'] ?? '获取歌曲失败');
-    }
-
-    final List<dynamic> tracksJson = tracksBody['tracks'] ?? [];
-    final List<PlaylistTrack> tracks = tracksJson
-        .map((t) => PlaylistTrack.fromJson(t))
-        .toList();
-
-    // 4. 随机挑选3首
-    tracks.shuffle();
-    return tracks.take(3).map((t) => t.toTrack()).toList();
-  }
-
-  /// 加载歌单中的一小部分歌曲用于展示
-  Future<List<PlaylistTrack>> _loadPlaylistTracksSample(int playlistId) async {
-    // 这里我们直接调用 PlaylistService 的方法，但理想情况下可以做一个缓存或优化
-    // 为了简单起见，我们直接加载
-    await PlaylistService().loadPlaylistTracks(playlistId);
-    return PlaylistService().currentTracks;
+    
+    return selected;
   }
 
   void _syncGlobalBackHandler() {

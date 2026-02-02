@@ -430,43 +430,55 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
                       ),
                     ),
                   ),
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.white.withOpacity(0.16),
-                          (themeTint ?? colorScheme.primary).withOpacity(0.10),
-                          Colors.white.withOpacity(0.05),
-                        ],
-                        stops: const [0.0, 0.45, 1.0],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: true,
+                // Material Expressive: Cleaner Look, no complex gradients
+                if (!ThemeManager().isFluentFramework && !ThemeManager().isCupertinoFramework)
+                  Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(28),
-                        gradient: RadialGradient(
-                          center: const Alignment(-0.9, -0.9),
-                          radius: 1.2,
+                        color: colorScheme.surfaceContainerHighest.withOpacity(0.95),
+                      ),
+                    ),
+                  )
+                else ...[
+                   Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                           colors: [
-                            Colors.white.withOpacity(0.20),
-                            Colors.white.withOpacity(0.04),
-                            Colors.transparent,
+                            Colors.white.withOpacity(0.16),
+                            (themeTint ?? colorScheme.primary).withOpacity(0.10),
+                            Colors.white.withOpacity(0.05),
                           ],
                           stops: const [0.0, 0.45, 1.0],
                         ),
                       ),
                     ),
                   ),
-                ),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      ignoring: true,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          gradient: RadialGradient(
+                            center: const Alignment(-0.9, -0.9),
+                            radius: 1.2,
+                            colors: [
+                              Colors.white.withOpacity(0.20),
+                              Colors.white.withOpacity(0.04),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 0.45, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 Column(
                   children: [
                     if (!ThemeManager().isFluentFramework)
@@ -1124,12 +1136,25 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
             ),
           )
         else
-          IconButton(
-            icon: Icon(player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
-            color: colorScheme.primary,
-            iconSize: playIconSize,
-            onPressed: () => player.togglePlayPause(),
-            tooltip: player.isPlaying ? '暂停' : '播放',
+          Container(
+             decoration: BoxDecoration(
+               color: colorScheme.primary,
+               shape: BoxShape.circle,
+               boxShadow: [
+                 BoxShadow(
+                   color: colorScheme.primary.withOpacity(0.3),
+                   blurRadius: 8,
+                   offset: const Offset(0, 4),
+                 )
+               ]
+             ),
+             child: IconButton(
+                icon: Icon(player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                color: colorScheme.onPrimary,
+                iconSize: playIconSize,
+                onPressed: () => player.togglePlayPause(),
+                tooltip: player.isPlaying ? '暂停' : '播放',
+             ),
           ),
         if (!hideSkip)
         IconButton(

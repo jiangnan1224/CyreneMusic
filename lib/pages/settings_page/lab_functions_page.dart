@@ -7,6 +7,7 @@ import '../../services/auth_service.dart';
 import '../../widgets/material/material_settings_widgets.dart';
 
 import '../../services/lab_functions_service.dart';
+import 'equalizer_page.dart';
 
 /// 实验室功能内容组件
 class LabFunctionsContent extends StatefulWidget {
@@ -96,23 +97,29 @@ class _LabFunctionsContentState extends State<LabFunctionsContent> {
         MD3SettingsSection(
           title: '实验性功能',
           children: [
+            MD3SettingsTile(
+              leading: const Icon(Icons.graphic_eq),
+              title: '均衡器',
+              subtitle: '调节音频频率响应',
+              enabled: isSponsor,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: isSponsor
+                  ? () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const EqualizerPage()),
+                      )
+                  : null,
+            ),
             if (Platform.isAndroid)
               MD3SettingsTile(
                 leading: const Icon(Icons.widgets_outlined),
                 title: '安卓桌面小部件',
-                subtitle: isSponsor ? '开启安卓主屏幕音乐控制小部件' : '🎁 赞助用户独享功能',
+                subtitle: '开启安卓主屏幕音乐控制小部件',
                 enabled: isSponsor,
                 trailing: Switch(
                   value: _labService.enableAndroidWidget,
                   onChanged: isSponsor ? (value) => _labService.setEnableAndroidWidget(value) : null,
                 ),
-              )
-            else
-              const MD3SettingsTile(
-                leading: Icon(Icons.science_outlined),
-                title: '暂无实验性功能',
-                subtitle: '敬请期待更多功能的加入',
-                enabled: false,
               ),
           ],
         ),
@@ -154,7 +161,7 @@ class _LabFunctionsContentState extends State<LabFunctionsContent> {
           ),
           const SizedBox(height: 12),
           Text(
-            '在这里可以抢先体验还没有正式上线的功能，仅赞助用户可用。',
+            '在这里可以抢先体验还没有正式上线的功能。待功能完善后会向所有用户开放。',
             style: TextStyle(
               color: colorScheme.onSurfaceVariant,
               fontSize: 14,
@@ -187,21 +194,27 @@ class _LabFunctionsContentState extends State<LabFunctionsContent> {
         CupertinoListSection.insetGrouped(
           header: const Text('实验性功能'),
           children: [
+            CupertinoListTile(
+              leading: const Icon(CupertinoIcons.waveform, color: CupertinoColors.systemBlue),
+              title: const Text('均衡器'),
+              subtitle: const Text('调节音频效果'),
+              trailing: const Icon(CupertinoIcons.chevron_forward, size: 18, color: CupertinoColors.systemGrey),
+              onTap: isSponsor
+                  ? () => Navigator.push(
+                        context,
+                        CupertinoPageRoute(builder: (_) => const EqualizerPage()),
+                      )
+                  : null,
+            ),
             if (Platform.isAndroid)
               CupertinoListTile(
                 leading: const Icon(CupertinoIcons.square_grid_2x2, color: CupertinoColors.systemBlue),
                 title: const Text('安卓桌面小部件'),
-                subtitle: Text(isSponsor ? '开启安卓主屏幕音乐控制小部件' : '🎁 赞助用户独享功能'),
+                subtitle: const Text('开启安卓主屏幕音乐控制小部件'),
                 trailing: CupertinoSwitch(
                   value: _labService.enableAndroidWidget,
                   onChanged: isSponsor ? (value) => _labService.setEnableAndroidWidget(value) : null,
                 ),
-              )
-            else
-              const CupertinoListTile(
-                leading: Icon(CupertinoIcons.lab_flask, color: CupertinoColors.systemPurple),
-                title: Text('暂无实验性功能'),
-                subtitle: Text('敬请期待更多功能的加入'),
               ),
           ],
         ),
@@ -288,6 +301,21 @@ class _LabFunctionsContentState extends State<LabFunctionsContent> {
               ],
               Text('实验性功能', style: theme.typography.subtitle),
               const SizedBox(height: 12),
+              fluent_ui.Card(
+                child: fluent_ui.ListTile(
+                  leading: const Icon(fluent_ui.FluentIcons.equalizer),
+                  title: const Text('均衡器'),
+                  subtitle: const Text('自定义音频频率响应'),
+                  trailing: const Icon(fluent_ui.FluentIcons.chevron_right, size: 12),
+                  onPressed: isSponsor
+                      ? () => Navigator.push(
+                            context,
+                            fluent_ui.FluentPageRoute(builder: (_) => const EqualizerPage()),
+                          )
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 12),
               if (Platform.isAndroid)
                 fluent_ui.Card(
                   child: Row(
@@ -299,7 +327,7 @@ class _LabFunctionsContentState extends State<LabFunctionsContent> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('安卓桌面小部件', style: theme.typography.bodyLarge),
-                            Text(isSponsor ? '开启安卓主屏幕音乐控制小部件' : '🎁 赞助用户独享功能', style: theme.typography.body),
+                            Text('开启安卓主屏幕音乐控制小部件', style: theme.typography.body),
                           ],
                         ),
                       ),

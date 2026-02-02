@@ -6,6 +6,7 @@ import 'package:cyrene_music/services/play_history_service.dart';
 import 'package:cyrene_music/services/player_service.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
+import '../../utils/page_visibility_notifier.dart';
 import '../../utils/theme_manager.dart';
 
 /// 首页顶部胶囊 Tabs
@@ -394,13 +395,163 @@ class HistorySection extends StatelessWidget {
       return const SizedBox.shrink(); // 如果没有历史，不显示任何东西
     }
 
+    // Material Design Expressive 风格实现
+    if (!themeManager.isFluentFramework && !themeManager.isCupertinoFramework) {
+      return Card(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.6),
+        child: Column(
+          children: [
+            // Header Area - View All
+            InkWell(
+              onTap: () {
+                PageVisibilityNotifier().setCurrentPage(2);
+              },
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.history_rounded, 
+                      size: 20, 
+                      color: Theme.of(context).colorScheme.primary
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '最近播放',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    )
+                  ],
+                ),
+              ),
+            ),
+            // Content Area
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+              child: Row(
+                children: [
+                  // 大封面 - View All
+                  InkWell(
+                    onTap: () {
+                       PageVisibilityNotifier().setCurrentPage(2);
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Hero(
+                      tag: 'history_cover_${history.first.id}',
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: CachedNetworkImage(
+                            imageUrl: history.first.picUrl,
+                            width: 88,
+                            height: 88,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  // 歌曲列表 - Play Individual
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: List.generate(history.length, (index) {
+                        final item = history[index];
+                        return InkWell(
+                          onTap: () async {
+                              PlayerService().playTrack(item.toTrack());
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('正在加载：${item.name}'),
+                                  duration: const Duration(seconds: 1),
+                                ),
+                              );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 4.0),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '${index + 1}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: index == 0 
+                                      ? Theme.of(context).colorScheme.primary 
+                                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    item.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 60),
+                                  child: Text(
+                                    item.artists,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 兼容旧版布局 (Cupertino / Fluent)
     final borderRadius = BorderRadius.circular(24);
     final cardContent = Material(
       type: MaterialType.transparency,
       child: InkWell(
         onTap: () {
-          // TODO: 跳转到完整的历史记录页面
-          print('跳转到历史记录页面');
+          PageVisibilityNotifier().setCurrentPage(2);
         },
         child: Padding(
           padding: const EdgeInsets.all(12.0),
@@ -474,6 +625,7 @@ class HistorySection extends StatelessWidget {
       );
     }
 
+    // Cupertino 或者是其他 fallback 情况保持原样
     return Card(
       elevation: 0,
       clipBehavior: Clip.antiAlias,
@@ -492,12 +644,68 @@ class GuessYouLikeSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeManager = ThemeManager();
+    
+    // Material Design Expressive 风格实现
+    if (!themeManager.isFluentFramework && !themeManager.isCupertinoFramework) {
+       return Card(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.6),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: () {
+                // TODO: 跳转到推荐页面
+                print('跳转到推荐页面');
+              },
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_rounded, 
+                      size: 20, 
+                      color: Theme.of(context).colorScheme.primary
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '猜你喜欢',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    )
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+               padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+               child: SizedBox(
+                  child: guessYouLikeFuture != null
+                      ? _buildExpressiveContent(context)
+                      : _buildGuessYouLikePlaceholder(context),
+               ),
+            )
+          ],
+        ),
+      );
+    }
+
+    // 兼容旧版布局 (Cupertino / Fluent)
     final borderRadius = BorderRadius.circular(24);
     final cardContent = Material(
       type: MaterialType.transparency,
       child: InkWell(
         onTap: () {
-          // TODO: 跳转到推荐页面或歌单
           print('跳转到推荐页面');
         },
         child: Padding(
@@ -515,8 +723,8 @@ class GuessYouLikeSection extends StatelessWidget {
               SizedBox(
                 height: 64, // 固定高度防止布局跳动
                 child: guessYouLikeFuture != null
-                    ? _buildGuessYouLikeContent()
-                    : _buildGuessYouLikePlaceholder(),
+                    ? _buildGuessYouLikeContent(context)
+                    : _buildGuessYouLikePlaceholder(context, isLegacy: true),
               ),
             ],
           ),
@@ -541,7 +749,128 @@ class GuessYouLikeSection extends StatelessWidget {
     );
   }
 
-  Widget _buildGuessYouLikeContent() {
+  Widget _buildExpressiveContent(BuildContext context) {
+    return FutureBuilder<List<Track>>(
+      future: guessYouLikeFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: Padding(
+            padding: EdgeInsets.all(16.0),
+            child: CircularProgressIndicator(),
+          ));
+        }
+
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return _buildGuessYouLikePlaceholder(context, isError: true);
+        }
+
+        final sampleTracks = snapshot.data!;
+
+        return Row(
+          children: [
+            // 大封面
+            InkWell(
+              onTap: () {
+                 // TODO: 跳转到推荐页面
+                 print('跳转到推荐页面');
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Hero(
+                tag: 'guess_you_like_cover',
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: CachedNetworkImage(
+                      imageUrl: sampleTracks.first.picUrl,
+                      width: 88,
+                      height: 88,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 20),
+            // 歌曲列表
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: List.generate(sampleTracks.length, (index) {
+                  final track = sampleTracks[index];
+                  return InkWell(
+                    onTap: () async {
+                       PlayerService().playTrack(track);
+                       ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('正在加载：${track.name}'),
+                            duration: const Duration(seconds: 1),
+                          ),
+                       );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 4.0),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: index == 0 
+                                ? Theme.of(context).colorScheme.primary 
+                                : Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              track.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                           const SizedBox(width: 4),
+                           ConstrainedBox(
+                             constraints: const BoxConstraints(maxWidth: 60),
+                             child: Text(
+                              track.artists,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                             ),
+                           ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildGuessYouLikeContent(BuildContext context) {
     return FutureBuilder<List<Track>>(
       future: guessYouLikeFuture,
       builder: (context, snapshot) {
@@ -550,7 +879,7 @@ class GuessYouLikeSection extends StatelessWidget {
         }
 
         if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return _buildGuessYouLikePlaceholder(isError: true);
+          return _buildGuessYouLikePlaceholder(context, isLegacy: true, isError: true);
         }
 
         final sampleTracks = snapshot.data!;
@@ -601,28 +930,63 @@ class GuessYouLikeSection extends StatelessWidget {
     );
   }
 
-  Widget _buildGuessYouLikePlaceholder({bool isError = false}) {
+  Widget _buildGuessYouLikePlaceholder(BuildContext context, {bool isError = false, bool isLegacy = false}) {
     final message = isError ? '加载推荐失败' : '导入歌单查看更多';
-    return InkWell(
-      onTap: () {
-        // TODO: 跳转到我的页面，引导用户导入歌单
-        print('引导用户导入歌单');
-      },
-      child: Builder(
-        builder: (context) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+    
+    // Legacy 风格
+    if (isLegacy) {
+      return InkWell(
+        onTap: () {
+          print('引导用户导入歌单');
+        },
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-          );
-        },
+          ),
+        ),
+      );
+    }
+
+    // Expressive 风格
+    return InkWell(
+      onTap: () {
+        print('引导用户导入歌单');
+      },
+      child: Container(
+        height: 88,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isError ? Icons.error_outline : Icons.add_circle_outline,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
