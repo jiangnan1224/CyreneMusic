@@ -7,6 +7,7 @@ import '../../services/player_service.dart';
 import '../../services/color_extraction_service.dart';
 import '../../widgets/video_background_player.dart';
 import '../../widgets/mesh_gradient_background.dart';
+import '../../widgets/flowing_light_background.dart';
 
 /// 动态背景颜色缓存管理器（全局单例）
 /// 现在使用 ColorExtractionService 的缓存，这里只保留接口兼容
@@ -69,7 +70,7 @@ class _PlayerFluidCloudBackgroundState extends State<PlayerFluidCloudBackground>
     if (mounted && PlayerBackgroundService().backgroundType == PlayerBackgroundType.dynamic) {
       // 尝试调度颜色提取
       // _scheduleColorExtraction 内部会处理去重，避免频繁的进度更新导致重复计算
-      _scheduleColorExtraction();
+      // _scheduleColorExtraction();
     }
   }
 
@@ -77,7 +78,7 @@ class _PlayerFluidCloudBackgroundState extends State<PlayerFluidCloudBackground>
     if (mounted) {
       setState(() {});
       if (PlayerBackgroundService().backgroundType == PlayerBackgroundType.dynamic) {
-        _scheduleColorExtraction();
+      // _scheduleColorExtraction();
       }
     }
   }
@@ -175,7 +176,7 @@ class _PlayerFluidCloudBackgroundState extends State<PlayerFluidCloudBackground>
     if (_isFirstBuild) {
       _isFirstBuild = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scheduleColorExtraction();
+      // _scheduleColorExtraction();
       });
     }
     return _buildBackground();
@@ -188,12 +189,8 @@ class _PlayerFluidCloudBackgroundState extends State<PlayerFluidCloudBackground>
     
     switch (backgroundService.backgroundType) {
       case PlayerBackgroundType.adaptive:
-        // 自适应模式：根据封面渐变开关决定背景样式
-        if (backgroundService.enableGradient) {
-          return _buildCoverGradientBackground(greyColor);
-        } else {
-          return _buildAlbumCoverBackground(greyColor);
-        }
+        // 自适应模式：专辑封面在左侧，向右渐变到主题色
+        return _buildAdaptiveBackground(greyColor);
         
       case PlayerBackgroundType.solidColor:
         // 纯色背景
@@ -213,21 +210,47 @@ class _PlayerFluidCloudBackgroundState extends State<PlayerFluidCloudBackground>
     }
   }
 
-  /// 构建动态背景
+  /// 构建动态背景（新版流体云效果）
   Widget _buildDynamicBackground(Color greyColor) {
-    return RepaintBoundary(
-      child: MeshGradientBackground(
-        colors: _dynamicColors,
-        speed: 0.35,
-        backgroundColor: _dynamicColors.isNotEmpty ? _dynamicColors[0] : greyColor,
-        animate: true,
-      ),
+    // 使用 ListenableBuilder 监听 PlayerService，确保歌曲切换时封面也会更新
+    return ListenableBuilder(
+      listenable: PlayerService(),
+      builder: (context, _) {
+        // 获取当前封面图片的 Provider
+        final player = PlayerService();
+        // 优先使用缓存的 Provider
+        ImageProvider? imageProvider = player.currentCoverImageProvider;
+        
+        // 如果没有 Provider，尝试从 URL 构建
+        if (imageProvider == null) {
+            final song = player.currentSong;
+            final track = player.currentTrack;
+            final imageUrl = song?.pic ?? track?.picUrl;
+            
+            if (imageUrl != null && imageUrl.isNotEmpty) {
+               if (imageUrl.startsWith('http')) {
+                 imageProvider = CachedNetworkImageProvider(imageUrl);
+               } else {
+                 imageProvider = FileImage(File(imageUrl));
+               }
+            }
+        }
+
+        return RepaintBoundary(
+          child: FlowingLightBackground(
+            imageProvider: imageProvider,
+            useDesktopProcessing: true,
+            // 使用与移动端一致的半透明遮罩
+            child: Container(color: Colors.black.withOpacity(0.15)), 
+          ),
+        );
+      },
     );
   }
 
-  /// 构建封面渐变背景（开启封面渐变时使用）
+  /// 构建自适应背景
   /// 专辑封面在左侧，渐变过渡到右侧的主题色
-  Widget _buildCoverGradientBackground(Color greyColor) {
+  Widget _buildAdaptiveBackground(Color greyColor) {
     // 使用 ListenableBuilder 监听 PlayerService，确保歌曲切换时封面也会更新
     return ListenableBuilder(
       listenable: PlayerService(),
@@ -259,7 +282,7 @@ class _PlayerFluidCloudBackgroundState extends State<PlayerFluidCloudBackground>
                       top: 0,
                       bottom: 0,
                       child: AspectRatio(
-                        aspectRatio: 1.1, // 横向宽度增加10%（1.0 -> 1.1）
+                        aspectRatio: 1.2, // 稍微加宽一点比例 (1.1 -> 1.2)
                         child: Stack(
                           children: [
                             // 封面图片（支持网络 URL 和本地文件）
@@ -276,9 +299,9 @@ class _PlayerFluidCloudBackgroundState extends State<PlayerFluidCloudBackground>
                                       Colors.transparent,  // 左侧和中间保持透明，显示封面
                                       Colors.transparent,
                                       color.withOpacity(0.3),  // 右侧开始融合主题色
-                                      color.withOpacity(0.7),  // 最右侧更多主题色
+                                      color.withOpacity(0.9),  // 最右侧更多主题色
                                     ],
-                                    stops: const [0.0, 0.6, 0.85, 1.0],
+                                    stops: const [0.0, 0.5, 0.8, 1.0], // 调整渐变点，显示更多封面
                                   ),
                                 ),
                               ),
@@ -297,12 +320,12 @@ class _PlayerFluidCloudBackgroundState extends State<PlayerFluidCloudBackground>
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
                           colors: [
-                            Colors.transparent,        // 左侧完全透明，显示封面原貌
-                            color.withOpacity(0.5),    // 左中部开始融合主题色
-                            color.withOpacity(0.85),   // 中部主题色更明显
+                            Colors.transparent,        // 左侧完全透明
+                            color.withOpacity(0.2),    // 开始融合
+                            color.withOpacity(0.8),   // 主题色更明显
                             color,                      // 右侧完全不透明的主题色
                           ],
-                          stops: const [0.0, 0.25, 0.5, 0.7],  // 更自然的渐变分布
+                          stops: const [0.0, 0.4, 0.7, 0.9],  // 调整渐变，让左侧更清晰
                         ),
                       ),
                     ),
@@ -316,28 +339,7 @@ class _PlayerFluidCloudBackgroundState extends State<PlayerFluidCloudBackground>
     );
   }
 
-  /// 构建专辑封面背景（关闭封面渐变时使用）
-  /// 专辑封面 100% 填充，保持长宽比，居中裁剪
-  Widget _buildAlbumCoverBackground(Color greyColor) {
-    // 使用 ListenableBuilder 监听 PlayerService，确保歌曲切换时封面也会更新
-    return ListenableBuilder(
-      listenable: PlayerService(),
-      builder: (context, _) {
-        final song = PlayerService().currentSong;
-        final track = PlayerService().currentTrack;
-        final imageUrl = song?.pic ?? track?.picUrl ?? '';
-        
-        if (imageUrl.isEmpty) {
-          // 没有封面时显示默认背景
-          return _buildDefaultBackground(greyColor);
-        }
-        
-        return RepaintBoundary(
-          child: _buildCoverImage(imageUrl, greyColor, fullCover: true),
-        );
-      },
-    );
-  }
+
 
   /// 构建默认背景（无封面时使用）
   Widget _buildDefaultBackground(Color greyColor) {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -102,7 +103,7 @@ Future<void> main() async {
       });
     }
   
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux || Platform.isAndroid) {
       await timed('MediaKit.ensureInitialized', () {
         try {
           MediaKit.ensureInitialized();
@@ -117,6 +118,11 @@ Future<void> main() async {
       await PersistentStorageService().initialize();
     });
     log(' 持久化存储服务已初始化');
+
+    await timed('DeveloperModeService.initialize', () async {
+      await DeveloperModeService().initialize();
+    });
+    log('✅ 开发者模式服务已初始化');
   
     await timed('PersistentStorageService.getBackupStats', () {
       final storageStats = PersistentStorageService().getBackupStats();
@@ -387,8 +393,8 @@ class _MyAppState extends State<MyApp> {
   void _setupAudioSourceCallback() {
     PlayerService().onAudioSourceNotConfigured = () {
       print('🔔 [MyApp] 音源未配置回调被触发');
-      // 优先使用 _GlobalContextHolder（包含正确的 Localizations）
-      final globalContext = _GlobalContextHolder.context;
+      // 优先使用 GlobalContextHolder（包含正确的 Localizations）
+      final globalContext = GlobalContextHolder.context;
       final navigatorContext = MyApp.navigatorKey.currentContext;
       final contextToUse = globalContext ?? navigatorContext;
       
@@ -415,7 +421,7 @@ class _MyAppState extends State<MyApp> {
     final themeManager = ThemeManager();
 
     return AnimatedBuilder(
-      animation: themeManager,
+      animation: Listenable.merge([themeManager, DeveloperModeService()]),
       builder: (context, _) {
         final lightTheme = themeManager.buildThemeData(Brightness.light);
         final darkTheme = themeManager.buildThemeData(Brightness.dark);
@@ -431,16 +437,25 @@ class _MyAppState extends State<MyApp> {
               return fluent.FluentApp(
                 title: 'Cyrene Music',
                 debugShowCheckedModeBanner: false,
+                showPerformanceOverlay: DeveloperModeService().showPerformanceOverlay,
                 theme: themeManager.buildFluentThemeData(Brightness.light),
                 darkTheme: themeManager.buildFluentThemeData(Brightness.dark),
                 themeMode: _mapMaterialThemeMode(themeManager.themeMode),
                 scrollBehavior: const _FluentScrollBehavior(),
                 builder: (context, child) {
                   // 保存 Navigator context 供全局使用
-                  _GlobalContextHolder._context = context;
+                  // 使用 FToastBuilder 以确保 Toast 能够正确初始化
+                  final ftoastBuilder = FToastBuilder();
                   // 添加 ScaffoldMessenger 支持 SnackBar（即使在 Fluent UI 中）
                   return ScaffoldMessenger(
-                    child: child ?? const SizedBox.shrink(),
+                    child: ftoastBuilder(context, Overlay(
+                      initialEntries: [
+                        OverlayEntry(builder: (innerContext) {
+                          GlobalContextHolder._context = innerContext;
+                          return child!;
+                        }),
+                      ],
+                    )),
                   );
                 },
                 home: isMiniMode ? const MiniPlayerWindowPage() : const DesktopAppGate(),
@@ -464,6 +479,7 @@ class _MyAppState extends State<MyApp> {
           return MaterialApp(
             title: 'Cyrene Music',
             debugShowCheckedModeBanner: false,
+            showPerformanceOverlay: DeveloperModeService().showPerformanceOverlay,
             navigatorKey: MyApp.navigatorKey,
             theme: lightTheme.copyWith(
               cupertinoOverrideTheme: themeManager.buildCupertinoThemeData(Brightness.light),
@@ -473,11 +489,17 @@ class _MyAppState extends State<MyApp> {
             ),
             themeMode: themeManager.themeMode,
             builder: (context, child) {
-              // 保存 Navigator context 供全局使用
-              _GlobalContextHolder._context = context;
+              final ftoastBuilder = FToastBuilder();
               return CupertinoTheme(
                 data: cupertinoTheme,
-                child: child ?? const SizedBox.shrink(),
+                child: ftoastBuilder(context, Overlay(
+                  initialEntries: [
+                    OverlayEntry(builder: (innerContext) {
+                      GlobalContextHolder._context = innerContext;
+                      return child!;
+                    }),
+                  ],
+                )),
               );
             },
             home: const MobileAppGate(),
@@ -495,8 +517,15 @@ class _MyAppState extends State<MyApp> {
             darkTheme: darkTheme,
             themeMode: themeManager.themeMode,
             builder: (context, child) {
-              _GlobalContextHolder._context = context;
-              return child ?? const SizedBox.shrink();
+              final ftoastBuilder = FToastBuilder();
+              return ftoastBuilder(context, Overlay(
+                initialEntries: [
+                  OverlayEntry(builder: (innerContext) {
+                    GlobalContextHolder._context = innerContext;
+                    return child!;
+                  }),
+                ],
+              ));
             },
             home: const MobileAppGate(),
           );
@@ -506,14 +535,27 @@ class _MyAppState extends State<MyApp> {
         return MaterialApp(
           title: 'Cyrene Music',
           debugShowCheckedModeBanner: false,
+          showPerformanceOverlay: DeveloperModeService().showPerformanceOverlay,
           navigatorKey: MyApp.navigatorKey,
           theme: lightTheme,
           darkTheme: darkTheme,
           themeMode: themeManager.themeMode,
           builder: (context, child) {
-            // 保存 Navigator context 供全局使用
-            _GlobalContextHolder._context = context;
-            return child ?? const SizedBox.shrink();
+            final ftoastBuilder = FToastBuilder();
+            final content = ftoastBuilder(context, Overlay(
+              initialEntries: [
+                OverlayEntry(builder: (innerContext) {
+                  GlobalContextHolder._context = innerContext;
+                  return child!;
+                }),
+              ],
+            ));
+            
+            // 桌面端添加刷新率助推器
+            if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+              return RefreshRateBooster(child: content);
+            }
+            return content;
           },
           home: Platform.isWindows
             ? _WindowsRoundedContainer(child: const MainLayout())
@@ -525,7 +567,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 /// 全局 Context 保存器
-class _GlobalContextHolder {
+class GlobalContextHolder {
   static BuildContext? _context;
   static BuildContext? get context => _context;
 }
@@ -706,6 +748,56 @@ void showAudioSourceNotConfiguredDialog(BuildContext context) {
           ],
         );
       },
+    );
+  }
+}
+
+/// 刷新率助推器 (Keep-Alive Component)
+/// 在桌面端通过一个极低负载的动画，诱导 Flutter 引擎始终以显示器最高频率运行
+class RefreshRateBooster extends StatefulWidget {
+  final Widget child;
+  const RefreshRateBooster({super.key, required this.child});
+
+  @override
+  State<RefreshRateBooster> createState() => _RefreshRateBoosterState();
+}
+
+class _RefreshRateBoosterState extends State<RefreshRateBooster> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // 创建一个极其轻量级的动画
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(); // 永远重复
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        widget.child,
+        // 渲染一个几乎不可见（不占像素，不重绘复杂区域）的动画
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            // 通过极小的不透明度变化触发重绘，但不产生视觉干扰
+            return const Opacity(
+              opacity: 0.001,
+              child: SizedBox(width: 1, height: 1),
+            );
+          },
+        ),
+      ],
     );
   }
 }

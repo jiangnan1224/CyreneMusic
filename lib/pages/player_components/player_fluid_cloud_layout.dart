@@ -147,7 +147,7 @@ class _PlayerFluidCloudLayoutState extends State<PlayerFluidCloudLayout>
     return Stack(
       children: [
         // 1. 全局背景（流体云专用背景：自适应模式下始终显示专辑封面 100% 填充）
-        const PlayerFluidCloudBackground(),
+        Positioned.fill(child: const PlayerFluidCloudBackground()),
         
         // 2. 玻璃拟态遮罩 (整个容器)
         Positioned.fill(

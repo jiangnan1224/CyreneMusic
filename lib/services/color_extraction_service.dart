@@ -150,6 +150,71 @@ class ColorExtractionService {
     }
   }
 
+  /// 从图片的特定区域提取颜色（异步，不阻塞主线程）
+  /// 特别适用于移动端从封面底部提取主题色的场景
+  Future<ColorExtractionResult?> extractColorsFromRegion(
+    String imageUrl, {
+    required Rect region,
+    int sampleSize = 32,
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    if (imageUrl.isEmpty) return null;
+
+    final cacheKey = '${imageUrl}_region_${region.left}_${region.top}_${region.width}_${region.height}';
+    
+    // 检查缓存
+    if (_cache.containsKey(cacheKey)) {
+      return _cache[cacheKey];
+    }
+
+    try {
+      Uint8List imageBytes;
+      
+      // 判断是网络 URL 还是本地文件路径
+      final isNetwork = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
+      
+      if (isNetwork) {
+        // 尝试从 CachedNetworkImageProvider 获取已加载的图片，避免重新下载
+        // 这对于已经显示的封面非常有效
+        final result = await extractColorsFromCachedImage(
+          imageUrl, 
+          sampleSize: sampleSize, 
+          timeout: timeout,
+          region: region,
+        );
+        if (result != null) return result;
+
+        // 如果缓存获取失败，降级到下载
+        final response = await http.get(Uri.parse(imageUrl)).timeout(timeout);
+        if (response.statusCode != 200) return null;
+        imageBytes = response.bodyBytes;
+      } else {
+        final file = File(imageUrl);
+        if (!await file.exists()) return null;
+        imageBytes = await file.readAsBytes();
+      }
+
+      // 在 isolate 中处理（裁剪 + 缩放 + 提取）
+      final result = await compute(
+        _extractColorsInIsolate,
+        _ColorExtractionParams(
+          imageBytes: imageBytes,
+          sampleSize: sampleSize,
+          region: region,
+        ),
+      );
+
+      if (result != null) {
+        _cacheResult(cacheKey, result);
+      }
+
+      return result;
+    } catch (e) {
+      debugPrint('⚠️ [ColorExtraction] 区域颜色提取失败: $e');
+      return null;
+    }
+  }
+
   /// 缓存结果
   void _cacheResult(String url, ColorExtractionResult result) {
     // 限制缓存大小
@@ -178,12 +243,17 @@ class ColorExtractionService {
     String imageUrl, {
     int sampleSize = 32,
     Duration timeout = const Duration(seconds: 3),
+    Rect? region,
   }) async {
     if (imageUrl.isEmpty) return null;
 
+    final cacheKey = region == null 
+        ? imageUrl 
+        : '${imageUrl}_region_${region.left}_${region.top}_${region.width}_${region.height}';
+
     // 1. 检查颜色缓存
-    if (_cache.containsKey(imageUrl)) {
-      return _cache[imageUrl];
+    if (_cache.containsKey(cacheKey)) {
+      return _cache[cacheKey];
     }
 
     // 判断是否是网络 URL
@@ -214,11 +284,12 @@ class ColorExtractionService {
           _ColorExtractionParams(
             imageBytes: imageBytes,
             sampleSize: sampleSize,
+            region: region,
           ),
         );
 
         if (result != null) {
-          _cacheResult(imageUrl, result);
+          _cacheResult(cacheKey, result);
         }
         return result;
       } else {
@@ -273,10 +344,12 @@ class ColorExtractionService {
 class _ColorExtractionParams {
   final Uint8List imageBytes;
   final int sampleSize;
+  final Rect? region;
 
   const _ColorExtractionParams({
     required this.imageBytes,
     required this.sampleSize,
+    this.region,
   });
 }
 
@@ -285,9 +358,21 @@ class _ColorExtractionParams {
 ColorExtractionResult? _extractColorsInIsolate(_ColorExtractionParams params) {
   try {
     // 使用 image 包解码图片（纯 Dart，可在 isolate 中运行）
-    final image = img.decodeImage(params.imageBytes);
+    img.Image? image = img.decodeImage(params.imageBytes);
     if (image == null) {
       return null;
+    }
+
+    // 如果指定了区域，先进行裁剪
+    if (params.region != null) {
+      final r = params.region!;
+      image = img.copyCrop(
+        image,
+        x: r.left.toInt(),
+        y: r.top.toInt(),
+        width: r.width.toInt(),
+        height: r.height.toInt(),
+      );
     }
 
     // 缩放图片以提高性能

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
+import 'developer_mode_service.dart';
 
 /// 头像获取服务
 /// 
@@ -51,11 +52,15 @@ class AvatarFetchService {
     final cached = await _getFromCache(cacheKey ?? _generateCacheKey(url));
     if (cached != null) {
       print('✅ [AvatarFetch] 从缓存加载头像: $cacheKey');
+      DeveloperModeService().addLog('✅ [AvatarFetch] 从缓存加载头像 ($cacheKey)');
       return cached;
     }
     
+    DeveloperModeService().addLog('🔄 [AvatarFetch] 准备获取新头像: $url');
+    
     // 初始化 WebView（如果尚未初始化）
     if (!_isInitialized) {
+      DeveloperModeService().addLog('🚀 [AvatarFetch] WebView 未初始化，正在启动...');
       await _initialize();
     }
     
@@ -144,6 +149,7 @@ class AvatarFetchService {
       },
       onConsoleMessage: (controller, message) {
         print('🌐 [AvatarFetch Console] ${message.message}');
+        DeveloperModeService().addLog('🌐 [AvatarFetch JS] ${message.message}');
       },
       onLoadError: (controller, url, code, message) {
         print('❌ [AvatarFetch] 加载错误: $code - $message');
@@ -183,9 +189,11 @@ class AvatarFetchService {
           final base64Data = data.toString().split(',').last;
           final bytes = base64Decode(base64Data);
           print('✅ [AvatarFetch] 收到头像数据: ${bytes.length} bytes');
+          DeveloperModeService().addLog('📥 [AvatarFetch] 成功接收头像数据 (${bytes.length} bytes)');
           _fetchCompleter?.complete(bytes);
         } catch (e) {
           print('❌ [AvatarFetch] 解码失败: $e');
+          DeveloperModeService().addLog('❌ [AvatarFetch] 数据解码失败: $e');
           _fetchCompleter?.complete(null);
         }
       },
@@ -197,6 +205,7 @@ class AvatarFetchService {
       callback: (args) {
         final error = args.isNotEmpty ? args[0] : 'Unknown error';
         print('❌ [AvatarFetch] 加载失败: $error');
+        DeveloperModeService().addLog('❌ [AvatarFetch] WebView 内部加载失败: $error');
         _fetchCompleter?.complete(null);
       },
     );

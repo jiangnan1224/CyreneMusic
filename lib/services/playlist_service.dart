@@ -846,7 +846,7 @@ class PlaylistService extends ChangeNotifier {
     );
   }
 
-  /// 检查歌曲是否在用户的任何歌单中（调用后端 API）
+  /// 检查歌曲是否在用户的任一歌单中（调用后端 API）
   Future<TrackInPlaylistResult> isTrackInAnyPlaylist(Track track) async {
     if (!AuthService().isLoggedIn) {
       return TrackInPlaylistResult(inPlaylist: false, playlistIds: [], playlistNames: []);
@@ -880,6 +880,37 @@ class PlaylistService extends ChangeNotifier {
     }
     
     return TrackInPlaylistResult(inPlaylist: false, playlistIds: [], playlistNames: []);
+  }
+
+  /// 检查歌曲是否在“我的收藏”中
+  bool isFavorite(Track? track) {
+    if (track == null) return false;
+    final favPlaylist = defaultPlaylist;
+    if (favPlaylist == null) return false;
+    
+    // 如果当前正在加载收藏歌单，优先从 _currentTracks 查找
+    if (_currentPlaylistId == favPlaylist.id) {
+      return _currentTracks.any((t) => t.trackId == track.id.toString() && t.source == track.source);
+    }
+    
+    // 否则只能返回 false 或等待 API 检查（同步调用不支持 Future）
+    return false;
+  }
+
+  /// 切换收藏状态
+  Future<void> toggleFavorite(Track? track) async {
+    if (track == null) return;
+    final favPlaylist = defaultPlaylist;
+    if (favPlaylist == null) return;
+
+    final result = await isTrackInAnyPlaylist(track);
+    final isInFav = result.playlistIds.contains(favPlaylist.id);
+
+    if (isInFav) {
+      await removeTrackFromPlaylist(favPlaylist.id, track.id.toString(), track.source.name);
+    } else {
+      await addTrackToPlaylist(favPlaylist.id, track);
+    }
   }
 }
 

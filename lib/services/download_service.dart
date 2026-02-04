@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:path/path.dart' as path;
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,7 @@ import '../models/track.dart';
 import '../models/song_detail.dart';
 import 'cache_service.dart';
 import 'notification_service.dart';
+import 'audio_quality_service.dart';
 
 /// 下载进度回调
 typedef DownloadProgressCallback = void Function(double progress);
@@ -158,14 +160,15 @@ class DownloadService extends ChangeNotifier {
   }
 
   /// 生成安全的文件名
-  String _generateSafeFileName(Track track) {
+  String _generateSafeFileName(Track track, [String? level]) {
     // 移除不安全的字符
     final safeName = '${track.name} - ${track.artists}'
         .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
-    return '$safeName.mp3';
+    final extension = AudioQualityService.getExtensionFromLevel(level);
+    return '$safeName.$extension';
   }
 
   /// 从缓存下载（解密缓存文件）
@@ -203,7 +206,7 @@ class DownloadService extends ChangeNotifier {
       // 跳过元数据，读取加密的音频数据
       final encryptedAudioData = Uint8List.sublistView(
         fileData,
-        4 + metadataLength,
+        (4 + metadataLength).toInt(),
       );
 
       // 解密音频数据
@@ -275,7 +278,7 @@ class DownloadService extends ChangeNotifier {
     }
 
     try {
-      final fileName = _generateSafeFileName(track);
+      final fileName = _generateSafeFileName(track, songDetail.level);
       final outputPath = '$_downloadPath${Platform.pathSeparator}$fileName';
       final trackId = '${track.source.name}_${track.id}';
 
@@ -320,17 +323,16 @@ class DownloadService extends ChangeNotifier {
         task.progress = 1.0;
         print('✅ [DownloadService] 下载完成: $fileName');
         
-        // 嵌入专辑封面到 MP3 文件
+        // 启动元数据嵌入服务 (封面 & 歌词)
         final coverUrl = songDetail.pic.isNotEmpty ? songDetail.pic : track.picUrl;
-        if (coverUrl.isNotEmpty) {
-          await _embedAlbumCover(
-            outputPath,
-            coverUrl,
-            track.name,
-            track.artists,
-            track.album,
-          );
-        }
+        await _embedMetadata(
+          outputPath,
+          coverUrl: coverUrl,
+          lyrics: songDetail.lyric,
+          title: track.name,
+          artist: track.artists,
+          album: track.album,
+        );
         
         // 发送下载完成通知
         await _showDownloadCompleteNotification(
@@ -339,6 +341,7 @@ class DownloadService extends ChangeNotifier {
           filePath: outputPath,
           coverUrl: coverUrl,
         );
+        
       } else {
         task.isFailed = true;
         task.errorMessage = '下载失败';
@@ -361,11 +364,11 @@ class DownloadService extends ChangeNotifier {
   }
 
   /// 检查文件是否已下载
-  Future<bool> isDownloaded(Track track) async {
+  Future<bool> isDownloaded(Track track, [String? level]) async {
     if (_downloadPath == null) return false;
 
     try {
-      final fileName = _generateSafeFileName(track);
+      final fileName = _generateSafeFileName(track, level);
       final filePath = '$_downloadPath${Platform.pathSeparator}$fileName';
       return await File(filePath).exists();
     } catch (e) {
@@ -374,11 +377,11 @@ class DownloadService extends ChangeNotifier {
   }
 
   /// 获取下载的文件路径
-  Future<String?> getDownloadedFilePath(Track track) async {
+  Future<String?> getDownloadedFilePath(Track track, [String? level]) async {
     if (_downloadPath == null) return null;
 
     try {
-      final fileName = _generateSafeFileName(track);
+      final fileName = _generateSafeFileName(track, level);
       final filePath = '$_downloadPath${Platform.pathSeparator}$fileName';
 
       if (await File(filePath).exists()) {
@@ -391,73 +394,175 @@ class DownloadService extends ChangeNotifier {
     }
   }
 
-  /// 嵌入专辑封面到 MP3 文件
-  /// 使用 ID3v2.3 格式写入 APIC 帧
-  Future<void> _embedAlbumCover(
-    String mp3Path,
-    String coverUrl,
-    String title,
-    String artist,
+  /// 统一嵌入元数据 (封面 & 歌词)
+  Future<void> _embedMetadata(
+    String filePath, {
+    String? coverUrl,
+    String? lyrics,
+    required String title,
+    required String artist,
     String? album,
-  ) async {
+  }) async {
     try {
-      print('🖼️ [DownloadService] 开始嵌入专辑封面...');
+      final isMp3 = filePath.toLowerCase().endsWith('.mp3');
+      final isFlac = filePath.toLowerCase().endsWith('.flac');
+
+      if (!isMp3 && !isFlac) return;
+
+      print('🖼️ [DownloadService] 正在为 ${isMp3 ? "MP3" : "FLAC"} 注入元数据...');
       
-      // 下载封面图片
-      final coverResponse = await http.get(Uri.parse(coverUrl)).timeout(
-        const Duration(seconds: 10),
-      );
-      
-      if (coverResponse.statusCode != 200) {
-        print('⚠️ [DownloadService] 下载封面失败: HTTP ${coverResponse.statusCode}');
-        return;
+      Uint8List? coverData;
+      if (coverUrl != null && coverUrl.isNotEmpty) {
+        final resp = await http.get(Uri.parse(coverUrl)).timeout(const Duration(seconds: 10));
+        if (resp.statusCode == 200) coverData = resp.bodyBytes;
       }
-      
-      final coverData = coverResponse.bodyBytes;
-      print('🖼️ [DownloadService] 封面下载完成，大小: ${coverData.length} bytes');
-      
-      // 读取原始 MP3 文件
-      final mp3File = File(mp3Path);
-      final originalData = await mp3File.readAsBytes();
-      
-      // 检查是否已有 ID3v2 标签
-      int audioDataStart = 0;
-      if (originalData.length >= 10 &&
-          originalData[0] == 0x49 && // 'I'
-          originalData[1] == 0x44 && // 'D'
-          originalData[2] == 0x33) { // '3'
-        // 已有 ID3v2 标签，计算其大小
-        final size = ((originalData[6] & 0x7F) << 21) |
-                     ((originalData[7] & 0x7F) << 14) |
-                     ((originalData[8] & 0x7F) << 7) |
-                     (originalData[9] & 0x7F);
-        audioDataStart = 10 + size;
-        print('📝 [DownloadService] 检测到现有 ID3v2 标签，大小: $size bytes');
+
+      final audioFile = File(filePath);
+      final originalData = await audioFile.readAsBytes();
+
+      if (isMp3) {
+        await _embedMp3Metadata(filePath, originalData, coverData, lyrics, title, artist, album);
+      } else if (isFlac) {
+        await _embedFlacMetadata(filePath, originalData, coverData, lyrics, title, artist, album);
       }
-      
-      // 提取纯音频数据
-      final audioData = Uint8List.sublistView(originalData, audioDataStart);
-      
-      // 构建新的 ID3v2.3 标签
-      final id3Tag = _buildId3v2Tag(
-        title: title,
-        artist: artist,
-        album: album ?? '',
-        coverData: coverData,
-      );
-      
-      // 合并 ID3 标签和音频数据
-      final newFileData = Uint8List(id3Tag.length + audioData.length);
-      newFileData.setRange(0, id3Tag.length, id3Tag);
-      newFileData.setRange(id3Tag.length, newFileData.length, audioData);
-      
-      // 写回文件
-      await mp3File.writeAsBytes(newFileData);
-      
-      print('✅ [DownloadService] 专辑封面嵌入成功');
     } catch (e) {
-      print('❌ [DownloadService] 嵌入专辑封面失败: $e');
+      print('❌ [DownloadService] 元数据嵌入失败: $e');
     }
+  }
+
+  /// 内部方法：嵌入 MP3 元数据
+  Future<void> _embedMp3Metadata(String filePath, Uint8List originalData, Uint8List? coverData, String? lyrics, String title, String artist, String? album) async {
+    int audioDataStart = 0;
+    if (originalData.length >= 10 && originalData[0] == 0x49 && originalData[1] == 0x44 && originalData[2] == 0x33) {
+      final size = ((originalData[6] & 0x7F) << 21) | ((originalData[7] & 0x7F) << 14) | ((originalData[8] & 0x7F) << 7) | (originalData[9] & 0x7F);
+      audioDataStart = 10 + size;
+    }
+    final audioData = Uint8List.sublistView(originalData, audioDataStart);
+    final id3Tag = _buildId3v2Tag(title: title, artist: artist, album: album ?? '', coverData: coverData, lyrics: lyrics);
+    final newFileData = Uint8List(id3Tag.length + audioData.length);
+    newFileData.setRange(0, id3Tag.length, id3Tag);
+    newFileData.setRange(id3Tag.length, newFileData.length, audioData);
+    await File(filePath).writeAsBytes(newFileData);
+  }
+
+  /// 内部方法：嵌入 FLAC 元数据
+  Future<void> _embedFlacMetadata(String filePath, Uint8List fileData, Uint8List? coverData, String? lyrics, String title, String artist, String? album) async {
+    if (fileData.length < 4 || utf8.decode(fileData.sublist(0, 4)) != 'fLaC') throw Exception('无效 FLAC');
+    
+    final builder = BytesBuilder();
+    builder.add(fileData.sublist(0, 4));
+
+    int offset = 4;
+    bool pictureAdded = false;
+    bool commentAdded = false;
+
+    while (offset < fileData.length) {
+      final header = fileData[offset];
+      final isLastBlock = (header & 0x80) != 0;
+      final blockType = header & 0x7F;
+      final blockLength = (fileData[offset + 1] << 16) | (fileData[offset + 2] << 8) | fileData[offset + 3];
+
+      if (blockType == 6 || blockType == 4) { // 跳过旧的图片块(6)和注块块(4)
+        offset += 4 + blockLength;
+        if (isLastBlock) {
+          if (!commentAdded) builder.add(_buildVorbisCommentBlock(lyrics, title: title, artist: artist, album: album, isLast: !pictureAdded && coverData == null));
+          if (coverData != null && !pictureAdded) builder.add(_buildFlacPictureBlock(coverData, isLast: true));
+          break;
+        }
+        continue;
+      }
+
+      if (isLastBlock) {
+        builder.addByte(header & 0x7F); // 清除最后标志
+        builder.add(fileData.sublist(offset + 1, offset + 4 + blockLength));
+        builder.add(_buildVorbisCommentBlock(lyrics, title: title, artist: artist, album: album, isLast: coverData == null));
+        if (coverData != null) builder.add(_buildFlacPictureBlock(coverData, isLast: true));
+        offset += 4 + blockLength;
+        break;
+      }
+
+      builder.add(fileData.sublist(offset, offset + 4 + blockLength));
+      offset += 4 + blockLength;
+    }
+    
+    if (offset < fileData.length) builder.add(fileData.sublist(offset));
+    await File(filePath).writeAsBytes(builder.toBytes());
+  }
+
+  /// 构建 Vorbis Comment 块 (Type 4) 用于存放 FLAC 歌词和基本信息
+  Uint8List _buildVorbisCommentBlock(String? lyrics, {required String title, required String artist, String? album, bool isLast = false}) {
+    final content = BytesBuilder();
+    // Vendor string length (4 bytes) + Vendor string ("CyreneMusic")
+    final vendor = utf8.encode('CyreneMusic');
+    content.addByte(vendor.length & 0xFF); content.addByte(0); content.addByte(0); content.addByte(0);
+    content.add(vendor);
+    
+    // User comment list length (4 bytes)
+    final comments = <Uint8List>[];
+    comments.add(utf8.encode('TITLE=$title'));
+    comments.add(utf8.encode('ARTIST=$artist'));
+    if (album != null && album.isNotEmpty) {
+      comments.add(utf8.encode('ALBUM=$album'));
+    }
+    if (lyrics != null && lyrics.isNotEmpty) {
+      comments.add(utf8.encode('LYRICS=$lyrics'));
+    }
+    
+    content.addByte(comments.length & 0xFF); content.addByte(0); content.addByte(0); content.addByte(0);
+    for (final c in comments) {
+      content.addByte(c.length & 0xFF); content.addByte((c.length >> 8) & 0xFF); content.addByte((c.length >> 16) & 0xFF); content.addByte((c.length >> 24) & 0xFF);
+      content.add(c);
+    }
+
+    final bytes = content.toBytes();
+    final result = BytesBuilder();
+    result.addByte((isLast ? 0x80 : 0x00) | 0x04);
+    result.addByte((bytes.length >> 16) & 0xFF);
+    result.addByte((bytes.length >> 8) & 0xFF);
+    result.addByte(bytes.length & 0xFF);
+    result.add(bytes);
+    return result.toBytes();
+  }
+
+  /// 构建 FLAC PICTURE 元数据块 (Type 6)
+  Uint8List _buildFlacPictureBlock(Uint8List imageData, {bool isLast = false}) {
+    final blockContent = BytesBuilder();
+    
+    // 1. Picture type (4 bytes): 3 = Front Cover
+    blockContent.addByte(0); blockContent.addByte(0); blockContent.addByte(0); blockContent.addByte(3);
+    
+    // 2. MIME type
+    final mimeType = imageData.length >= 8 && imageData[0] == 0x89 ? 'image/png' : 'image/jpeg';
+    final mimeBytes = utf8.encode(mimeType);
+    blockContent.addByte(0); blockContent.addByte(0); blockContent.addByte(0); blockContent.addByte(mimeBytes.length);
+    blockContent.add(mimeBytes);
+    
+    // 3. Description (Empty)
+    blockContent.addByte(0); blockContent.addByte(0); blockContent.addByte(0); blockContent.addByte(0);
+    
+    // 4. Width, Height, Depth, Colors (All 0 for simple embedding, player will auto-detect)
+    for (int i = 0; i < 16; i++) blockContent.addByte(0);
+    
+    // 5. Picture data length
+    blockContent.addByte((imageData.length >> 24) & 0xFF);
+    blockContent.addByte((imageData.length >> 16) & 0xFF);
+    blockContent.addByte((imageData.length >> 8) & 0xFF);
+    blockContent.addByte(imageData.length & 0xFF);
+    
+    // 6. Picture data
+    blockContent.add(imageData);
+    
+    final contentBytes = blockContent.toBytes();
+    final result = BytesBuilder();
+    
+    // Block Header: [Last-flag | Type(6)] [Length(24bit)]
+    result.addByte((isLast ? 0x80 : 0x00) | 0x06);
+    result.addByte((contentBytes.length >> 16) & 0xFF);
+    result.addByte((contentBytes.length >> 8) & 0xFF);
+    result.addByte(contentBytes.length & 0xFF);
+    result.add(contentBytes);
+    
+    return result.toBytes();
   }
 
   /// 构建 ID3v2.3 标签
@@ -465,7 +570,8 @@ class DownloadService extends ChangeNotifier {
     required String title,
     required String artist,
     required String album,
-    required Uint8List coverData,
+    Uint8List? coverData,
+    String? lyrics,
   }) {
     final frames = <Uint8List>[];
     
@@ -481,7 +587,14 @@ class DownloadService extends ChangeNotifier {
     }
     
     // APIC 帧 (专辑封面)
-    frames.add(_buildApicFrame(coverData));
+    if (coverData != null) {
+      frames.add(_buildApicFrame(coverData));
+    }
+
+    // USLT 帧 (歌词)
+    if (lyrics != null && lyrics.isNotEmpty) {
+      frames.add(_buildUsltFrame(lyrics));
+    }
     
     // 计算所有帧的总大小
     int totalFrameSize = 0;
@@ -608,6 +721,30 @@ class DownloadService extends ChangeNotifier {
     
     // 图片数据
     frame.setRange(offset, offset + imageData.length, imageData);
+    
+    return frame;
+  }
+
+  /// 构建 USLT 帧 (歌词)
+  Uint8List _buildUsltFrame(String lyrics) {
+    // 文本编码 (1 byte) + Language (3 bytes) + Content descriptor + lyrics
+    final lang = utf8.encode('eng');
+    final lyricsBytes = utf8.encode(lyrics);
+    
+    final frameContentSize = 1 + 3 + 1 + lyricsBytes.length;
+    final frame = Uint8List(10 + frameContentSize);
+    
+    frame[0] = 0x55; frame[1] = 0x53; frame[2] = 0x4C; frame[3] = 0x54; // 'USLT'
+    frame[4] = (frameContentSize >> 24) & 0xFF;
+    frame[5] = (frameContentSize >> 16) & 0xFF;
+    frame[6] = (frameContentSize >> 8) & 0xFF;
+    frame[7] = frameContentSize & 0xFF;
+    
+    int offset = 10;
+    frame[offset++] = 0x03; // UTF-8
+    frame.setRange(offset, offset + 3, lang); offset += 3;
+    frame[offset++] = 0x00; // 描述结束符
+    frame.setRange(offset, offset + lyricsBytes.length, lyricsBytes);
     
     return frame;
   }

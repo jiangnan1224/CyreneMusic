@@ -23,6 +23,7 @@ import '../services/avatar_fetch_service.dart';
 import '../services/developer_mode_service.dart';
 import '../services/navigation_provider.dart';
 import '../services/home_search_service.dart';
+import '../services/global_back_handler_service.dart';
 import '../services/window_background_service.dart';
 import '../utils/page_visibility_notifier.dart';
 import '../utils/theme_manager.dart';
@@ -30,6 +31,7 @@ import '../widgets/mini_player.dart';
 import '../widgets/search_widget.dart';
 import '../widgets/video_background_player.dart';
 import '../pages/home_page/home_overlay_controller.dart';
+import '../widgets/global_watermark.dart';
 
 /// Fluent UI 版本的主布局，使用 NavigationView
 /// 按照 Windows 设计规范实现左侧导航栏
@@ -646,6 +648,11 @@ class _FluentMainLayoutState extends State<FluentMainLayout> with WindowListener
   }
 
   void _handleGlobalBack() {
+    // 优先处理全局返回处理器
+    if (GlobalBackHandlerService().handleBack()) {
+      return;
+    }
+
     if (_isSearchVisible) {
       setState(() {
         _isSearchVisible = false;

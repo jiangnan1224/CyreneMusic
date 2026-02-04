@@ -166,5 +166,16 @@ extension AudioQualityExtension on AudioQuality {
         return '超清母带';
     }
   }
+
+  String get extension {
+    switch (this) {
+      case AudioQuality.lossless:
+      case AudioQuality.hires:
+      case AudioQuality.jymaster:
+        return 'flac';
+      default:
+        return 'mp3';
+    }
+  }
 }
 

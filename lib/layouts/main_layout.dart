@@ -24,6 +24,7 @@ import '../utils/theme_manager.dart';
 import '../pages/auth/auth_page.dart';
 import '../services/auth_overlay_service.dart';
 import '../services/player_service.dart';
+import '../widgets/global_watermark.dart';
 
 /// 主布局 - 包含侧边导航栏和内容区域
 class MainLayout extends StatefulWidget {
@@ -140,6 +141,8 @@ class _MainLayoutState extends State<MainLayout>
     AuthService().addListener(_onAuthChanged);
     // 监听布局偏好变化
     LayoutPreferenceService().addListener(_onLayoutPreferenceChanged);
+    // 监听页面可见性通知器（用于跨组件切换 Tab）
+    PageVisibilityNotifier().addListener(_onPageVisibilityNotifierChanged);
     // 监听开发者模式变化
     DeveloperModeService().addListener(_onDeveloperModeChanged);
     // 监听主题变化（包括移动端主题框架切换）
@@ -156,12 +159,17 @@ class _MainLayoutState extends State<MainLayout>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AuthService().validateToken();
     });
+    
+    // 初始化 PageVisibilityNotifier 状态与当前页面一致
+    // 避免因为热重启或某些情况导致状态不同步（Notifier 是单例可能保留了旧状态）
+    PageVisibilityNotifier().setCurrentPage(_selectedIndex);
   }
 
   @override
   void dispose() {
     AuthService().removeListener(_onAuthChanged);
     LayoutPreferenceService().removeListener(_onLayoutPreferenceChanged);
+    PageVisibilityNotifier().removeListener(_onPageVisibilityNotifierChanged);
     DeveloperModeService().removeListener(_onDeveloperModeChanged);
     ThemeManager().removeListener(_onThemeChanged);
     super.dispose();
@@ -197,6 +205,22 @@ class _MainLayoutState extends State<MainLayout>
           setState(() {});
         }
       });
+    }
+  }
+
+  void _onPageVisibilityNotifierChanged() {
+    if (mounted) {
+      final newIndex = PageVisibilityNotifier().currentPageIndex;
+      if (_selectedIndex != newIndex && newIndex < _pages.length) {
+        // 使用 addPostFrameCallback 避免在构建期间调用 setState
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _selectedIndex = newIndex;
+            });
+          }
+        });
+      }
     }
   }
 
@@ -333,7 +357,7 @@ class _MainLayoutState extends State<MainLayout>
     // 根据平台选择不同的布局
     if (Platform.isAndroid || Platform.isIOS) {
       // Android/iOS 始终使用移动布局
-      return _buildMobileLayout(context);
+      return GlobalWatermark(child: _buildMobileLayout(context));
     } else if (Platform.isWindows) {
       // Windows 根据用户偏好选择布局，使用 AnimatedBuilder 确保更新
       return AnimatedBuilder(
@@ -342,9 +366,11 @@ class _MainLayoutState extends State<MainLayout>
           final isDesktop = LayoutPreferenceService().isDesktopLayout;
           print('🖥️ [MainLayout] 当前布局模式: ${isDesktop ? "桌面模式" : "移动模式"}');
 
-          return isDesktop
-              ? _buildDesktopLayout(context)
-              : _buildMobileLayout(context);
+      return GlobalWatermark(
+        child: isDesktop
+            ? _buildDesktopLayout(context)
+            : _buildMobileLayout(context),
+      );
         },
       );
     } else {

@@ -331,25 +331,21 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
         return Listener(
           onPointerDown: (_) => _handlePointerDown(),
           onPointerUp: (_) => _resetCollapseTimer(),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            excludeFromSemantics: true,
-            onTap: () {
-              if (showCollapsed) {
-                _resetCollapseTimer(expand: true);
-                return;
-              }
-              _resetCollapseTimer();
-              _openFullPlayer(context);
-            },
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOutCubic,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: showCollapsed ? collapsed : expanded,
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOutCubic,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: showCollapsed ? collapsed : GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                excludeFromSemantics: true,
+                onTap: () {
+                  _resetCollapseTimer();
+                  _openFullPlayer(context);
+                },
+                child: expanded,
               ),
             ),
           ),
@@ -430,43 +426,55 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
                       ),
                     ),
                   ),
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.white.withOpacity(0.16),
-                          (themeTint ?? colorScheme.primary).withOpacity(0.10),
-                          Colors.white.withOpacity(0.05),
-                        ],
-                        stops: const [0.0, 0.45, 1.0],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: true,
+                // Material Expressive: Cleaner Look, no complex gradients
+                if (!ThemeManager().isFluentFramework && !ThemeManager().isCupertinoFramework)
+                  Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(28),
-                        gradient: RadialGradient(
-                          center: const Alignment(-0.9, -0.9),
-                          radius: 1.2,
+                        color: colorScheme.surfaceContainerHighest.withOpacity(0.95),
+                      ),
+                    ),
+                  )
+                else ...[
+                   Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                           colors: [
-                            Colors.white.withOpacity(0.20),
-                            Colors.white.withOpacity(0.04),
-                            Colors.transparent,
+                            Colors.white.withOpacity(0.16),
+                            (themeTint ?? colorScheme.primary).withOpacity(0.10),
+                            Colors.white.withOpacity(0.05),
                           ],
                           stops: const [0.0, 0.45, 1.0],
                         ),
                       ),
                     ),
                   ),
-                ),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      ignoring: true,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          gradient: RadialGradient(
+                            center: const Alignment(-0.9, -0.9),
+                            radius: 1.2,
+                            colors: [
+                              Colors.white.withOpacity(0.20),
+                              Colors.white.withOpacity(0.04),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 0.45, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 Column(
                   children: [
                     if (!ThemeManager().isFluentFramework)
@@ -810,18 +818,21 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
         key: const ValueKey('mini_collapsed'),
         margin: margin,
         alignment: Alignment.bottomLeft,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.12),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
+        child: GestureDetector(
+          onTap: () => _resetCollapseTimer(expand: true),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: cover,
           ),
-          child: cover,
         ),
       );
     }
@@ -830,42 +841,45 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
       key: const ValueKey('mini_collapsed'),
       margin: margin,
       alignment: Alignment.bottomLeft,
-      child: AnimatedBuilder(
-        animation: _breathingController ?? kAlwaysCompleteAnimation,
-        child: cover,
-        builder: (context, child) {
-          final controller = _breathingController;
-          final scaleAnim = _breathingScale;
-          final t = controller?.value ?? 1.0;
-          final scale = scaleAnim?.value ?? 1.0;
-          final glowColor = colorScheme.primary.withOpacity(ui.lerpDouble(0.35, 0.6, t) ?? 0.45);
-          final blur = ui.lerpDouble(18, 32, t) ?? 24;
-          final spread = ui.lerpDouble(3, 10, t) ?? 6;
+      child: GestureDetector(
+        onTap: () => _resetCollapseTimer(expand: true),
+        child: AnimatedBuilder(
+          animation: _breathingController ?? kAlwaysCompleteAnimation,
+          child: cover,
+          builder: (context, child) {
+            final controller = _breathingController;
+            final scaleAnim = _breathingScale;
+            final t = controller?.value ?? 1.0;
+            final scale = scaleAnim?.value ?? 1.0;
+            final glowColor = colorScheme.primary.withOpacity(ui.lerpDouble(0.35, 0.6, t) ?? 0.45);
+            final blur = ui.lerpDouble(18, 32, t) ?? 24;
+            final spread = ui.lerpDouble(3, 10, t) ?? 6;
 
-          return Transform.scale(
-            scale: scale,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: glowColor,
-                    blurRadius: blur,
-                    spreadRadius: spread,
-                  ),
-                ],
-              ),
+            return Transform.scale(
+              scale: scale,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: colorScheme.primary.withOpacity(ui.lerpDouble(0.25, 0.4, t) ?? 0.3)),
-                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: glowColor,
+                      blurRadius: blur,
+                      spreadRadius: spread,
+                    ),
+                  ],
                 ),
-                child: child,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: colorScheme.primary.withOpacity(ui.lerpDouble(0.25, 0.4, t) ?? 0.3)),
+                    color: colorScheme.surface,
+                  ),
+                  child: child,
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -1124,12 +1138,25 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
             ),
           )
         else
-          IconButton(
-            icon: Icon(player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
-            color: colorScheme.primary,
-            iconSize: playIconSize,
-            onPressed: () => player.togglePlayPause(),
-            tooltip: player.isPlaying ? '暂停' : '播放',
+          Container(
+             decoration: BoxDecoration(
+               color: colorScheme.primary,
+               shape: BoxShape.circle,
+               boxShadow: [
+                 BoxShadow(
+                   color: colorScheme.primary.withOpacity(0.3),
+                   blurRadius: 8,
+                   offset: const Offset(0, 4),
+                 )
+               ]
+             ),
+             child: IconButton(
+                icon: Icon(player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                color: colorScheme.onPrimary,
+                iconSize: playIconSize,
+                onPressed: () => player.togglePlayPause(),
+                tooltip: player.isPlaying ? '暂停' : '播放',
+             ),
           ),
         if (!hideSkip)
         IconButton(

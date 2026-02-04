@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song_detail.dart';
+import 'audio_source_service.dart';
+import 'lx_music_runtime_service.dart';
 
 /// 音质服务 - 管理用户选择的音质
 class AudioQualityService extends ChangeNotifier {
@@ -14,6 +16,137 @@ class AudioQualityService extends ChangeNotifier {
   AudioQuality get currentQuality => _currentQuality;
 
   static const String _qualityKey = 'audio_quality';
+
+  // ==================== 各音源支持的音质列表 ====================
+  
+  /// 音质优先级顺序（从低到高）
+  static const List<AudioQuality> _qualityPriority = [
+    AudioQuality.standard,   // 128k
+    AudioQuality.exhigh,     // 320k
+    AudioQuality.lossless,   // flac
+    AudioQuality.hires,      // flac24bit
+  ];
+  
+  /// TuneHub 音源支持的音质（128k, 320k, flac, flac24bit）
+  static const List<AudioQuality> tuneHubQualities = [
+    AudioQuality.standard,   // 128k
+    AudioQuality.exhigh,     // 320k
+    AudioQuality.lossless,   // flac
+    AudioQuality.hires,      // flac24bit
+  ];
+
+  /// OmniParse 音源支持的音质
+  static const List<AudioQuality> omniParseQualities = [
+    AudioQuality.standard,
+    AudioQuality.exhigh,
+    AudioQuality.lossless,
+  ];
+
+  /// 字符串音质转换为枚举
+  static AudioQuality? stringToQuality(String qualityStr) {
+    switch (qualityStr) {
+      case '128k':
+        return AudioQuality.standard;
+      case '320k':
+        return AudioQuality.exhigh;
+      case 'flac':
+        return AudioQuality.lossless;
+      case 'flac24bit':
+        return AudioQuality.hires;
+      default:
+        return null;
+    }
+  }
+  
+  /// 枚举转换为字符串音质（用于 API 请求）
+  static String qualityToString(AudioQuality quality) {
+    switch (quality) {
+      case AudioQuality.standard:
+        return '128k';
+      case AudioQuality.exhigh:
+        return '320k';
+      case AudioQuality.lossless:
+        return 'flac';
+      case AudioQuality.hires:
+      case AudioQuality.jymaster:
+        return 'flac24bit';
+      default:
+        return '320k';
+    }
+  }
+
+  /// 根据音源类型获取支持的音质列表
+  List<AudioQuality> getSupportedQualities(AudioSourceType sourceType) {
+    switch (sourceType) {
+      case AudioSourceType.tunehub:
+        return tuneHubQualities;
+      case AudioSourceType.lxmusic:
+        // 从洛雪运行时动态获取音质列表
+        final runtime = LxMusicRuntimeService();
+        if (runtime.isScriptReady && runtime.currentScript != null) {
+          final qualityStrings = runtime.currentScript!.supportedQualities;
+          if (qualityStrings.isNotEmpty) {
+            return qualityStrings
+                .map((s) => stringToQuality(s))
+                .where((q) => q != null)
+                .cast<AudioQuality>()
+                .toList();
+          }
+        }
+        // 回退默认值
+        return [AudioQuality.standard, AudioQuality.exhigh, AudioQuality.lossless];
+      case AudioSourceType.omniparse:
+        return omniParseQualities;
+    }
+  }
+  
+  /// 获取指定平台支持的音质列表（洛雪音源专用）
+  /// [lxPlatform] - 洛雪格式的平台代码 (wy, tx, kg, kw)
+  List<AudioQuality> getQualitiesForPlatform(String lxPlatform) {
+    final runtime = LxMusicRuntimeService();
+    if (runtime.isScriptReady && runtime.currentScript != null) {
+      final qualityStrings = runtime.currentScript!.getQualitiesForPlatform(lxPlatform);
+      if (qualityStrings.isNotEmpty) {
+        return qualityStrings
+            .map((s) => stringToQuality(s))
+            .where((q) => q != null)
+            .cast<AudioQuality>()
+            .toList();
+      }
+    }
+    return [AudioQuality.standard, AudioQuality.exhigh, AudioQuality.lossless];
+  }
+  
+  /// 获取降级后的音质
+  /// 当用户选择的音质不被当前平台支持时，返回最接近的较低音质
+  /// [selectedQuality] - 用户选择的音质
+  /// [supportedQualities] - 当前平台支持的音质列表
+  AudioQuality getEffectiveQuality(AudioQuality selectedQuality, List<AudioQuality> supportedQualities) {
+    // 如果支持的音质列表为空，返回默认音质
+    if (supportedQualities.isEmpty) {
+      return AudioQuality.exhigh;
+    }
+    
+    // 如果选择的音质被支持，直接返回
+    if (supportedQualities.contains(selectedQuality)) {
+      return selectedQuality;
+    }
+    
+    // 否则降级到最接近的较低音质
+    final selectedIndex = _qualityPriority.indexOf(selectedQuality);
+    
+    // 从选择的音质向下查找
+    for (int i = selectedIndex - 1; i >= 0; i--) {
+      if (supportedQualities.contains(_qualityPriority[i])) {
+        print('⚠️ [AudioQualityService] 音质降级: ${selectedQuality.displayName} -> ${_qualityPriority[i].displayName}');
+        return _qualityPriority[i];
+      }
+    }
+    
+    // 如果没有更低的，返回支持列表中的第一个
+    return supportedQualities.first;
+  }
+
 
   /// 加载音质设置
   Future<void> _loadQuality() async {
@@ -54,30 +187,59 @@ class AudioQualityService extends ChangeNotifier {
   }
 
   /// 获取音质名称
-  String getQualityName() {
-    switch (_currentQuality) {
+  String getQualityName([AudioQuality? quality]) {
+    final q = quality ?? _currentQuality;
+    switch (q) {
       case AudioQuality.standard:
         return '标准音质';
       case AudioQuality.exhigh:
-        return '极高音质';
+        return '高品质';
       case AudioQuality.lossless:
         return '无损音质';
+      case AudioQuality.hires:
+        return 'Hi-Res';
+      case AudioQuality.jymaster:
+        return '超清母带';
       default:
-        return '极高音质';
+        return '高品质';
+    }
+  }
+
+  /// 获取音质短标签（技术标识，如 128kbps, 320, flac, Hi-Res）
+  String getShortLabel([AudioQuality? quality]) {
+    final q = quality ?? _currentQuality;
+    switch (q) {
+      case AudioQuality.standard:
+        return '128kbps';
+      case AudioQuality.exhigh:
+        return '320kbps';
+      case AudioQuality.lossless:
+        return 'flac';
+      case AudioQuality.hires:
+        return 'Hi-Res';
+      case AudioQuality.jymaster:
+        return 'Master';
+      default:
+        return '320';
     }
   }
 
   /// 获取音质描述
-  String getQualityDescription() {
-    switch (_currentQuality) {
+  String getQualityDescription([AudioQuality? quality]) {
+    final q = quality ?? _currentQuality;
+    switch (q) {
       case AudioQuality.standard:
-        return '128kbps，节省流量';
+        return 'MP3 128kbps，节省流量';
       case AudioQuality.exhigh:
-        return '320kbps，推荐';
+        return 'MP3 320kbps，推荐';
       case AudioQuality.lossless:
-        return 'FLAC，音质最佳';
+        return 'FLAC 无损，音质优秀';
+      case AudioQuality.hires:
+        return 'Hi-Res FLAC 24bit，音质最佳';
+      case AudioQuality.jymaster:
+        return '超清母带，极致体验';
       default:
-        return '320kbps，推荐';
+        return 'MP3 320kbps，推荐';
     }
   }
 
@@ -123,8 +285,27 @@ class AudioQualityService extends ChangeNotifier {
       }
     }
     
-    print('❌ [AudioQualityService] QQ音乐无可用音质');
+  print('❌ [AudioQualityService] QQ音乐无可用音质');
     return null;
+  }
+
+  /// 根据音质/级别字符串获取文件后缀
+  static String getExtensionFromLevel(String? level) {
+    if (level == null || level.isEmpty) return 'mp3';
+    
+    // 尝试直接通过字符串特征判断（更鲁棒，因为 level 可能包含多种格式）
+    final lowerLevel = level.toLowerCase();
+    if (lowerLevel.contains('flac') || lowerLevel.contains('hires') || lowerLevel.contains('lossless')) {
+      return 'flac';
+    }
+    
+    // 尝试通过枚举转换
+    final quality = stringToQuality(level);
+    if (quality != null) {
+      return quality.extension;
+    }
+    
+    return 'mp3';
   }
 }
 

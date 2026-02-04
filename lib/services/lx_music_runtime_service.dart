@@ -49,6 +49,13 @@ class LxMusicRuntimeService {
   
   /// 脚本初始化时解析的支持音源列表（临时保存）
   List<String> _pendingSupportedSources = [];
+  
+  /// 脚本初始化时解析的支持音质列表（临时保存，所有平台并集）
+  List<String> _pendingSupportedQualities = [];
+  
+  /// 脚本初始化时解析的每个平台音质映射（临时保存）
+  Map<String, List<String>> _pendingPlatformQualities = {};
+
 
   // ==================== Getters ====================
   
@@ -78,9 +85,15 @@ class LxMusicRuntimeService {
       ),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
-        domStorageEnabled: false,
-        databaseEnabled: false,
-        cacheEnabled: false,
+        domStorageEnabled: true, // 开启 DOM 存储，某些脚本需要持久化
+        databaseEnabled: true,   // 开启数据库
+        cacheEnabled: true,      // 开启缓存以提高性能
+        
+        // Apple 平台稳定性关键配置
+        allowBackgroundAudioPlaying: true, // 允许后台媒体播放
+        allowsInlineMediaPlayback: true,      // 允许内联播放
+        mediaPlaybackRequiresUserGesture: false, // 禁用播放手势限制
+        
         // 安全设置
         allowFileAccess: false,
         allowContentAccess: false,
@@ -202,7 +215,7 @@ class LxMusicRuntimeService {
         }
       }
 
-      // 6. 用从 lxOnInited 获取的支持音源更新 scriptInfo
+      // 6. 用从 lxOnInited 获取的支持音源和音质更新 scriptInfo
       final updatedScriptInfo = LxScriptInfo(
         name: scriptInfo.name,
         version: scriptInfo.version,
@@ -211,11 +224,14 @@ class LxMusicRuntimeService {
         homepage: scriptInfo.homepage,
         script: scriptInfo.script,
         supportedSources: _pendingSupportedSources,
+        supportedQualities: _pendingSupportedQualities,
+        platformQualities: _pendingPlatformQualities,
       );
       
       _currentScript = updatedScriptInfo;
       print('✅ [LxMusicRuntime] 脚本加载成功');
       print('   支持的平台: ${updatedScriptInfo.supportedPlatforms}');
+      print('   支持的音质: ${updatedScriptInfo.supportedQualities}');
       return updatedScriptInfo;
     } catch (e) {
       print('❌ [LxMusicRuntime] 脚本加载失败: $e');
@@ -318,8 +334,40 @@ class LxMusicRuntimeService {
           if (sources != null && sources is Map) {
             _pendingSupportedSources = sources.keys.map((k) => k.toString()).toList();
             print('   支持的音源: $_pendingSupportedSources');
+            
+            // 提取每个平台支持的音质列表
+            final allQualities = <String>{};
+            _pendingPlatformQualities = {};
+            
+            sources.forEach((key, value) {
+              if (value is Map) {
+                // 洛雪脚本使用 'qualitys' 字段（注意拼写）
+                final qualitys = value['qualitys'];
+                if (qualitys is List && qualitys.isNotEmpty) {
+                  final qualityList = qualitys.map((t) => t.toString()).toList();
+                  _pendingPlatformQualities[key.toString()] = qualityList;
+                  allQualities.addAll(qualityList);
+                }
+              } else if (value is List) {
+                // 兼容其他格式 { wy: ['128k', '320k', 'flac'], ... }
+                final qualityList = value.map((t) => t.toString()).toList();
+                _pendingPlatformQualities[key.toString()] = qualityList;
+                allQualities.addAll(qualityList);
+              }
+            });
+            
+            // 按优先级排序音质列表
+            final qualityOrder = ['128k', '320k', 'flac', 'flac24bit'];
+            _pendingSupportedQualities = qualityOrder
+                .where((q) => allQualities.contains(q))
+                .toList();
+            
+            print('   支持的音质: $_pendingSupportedQualities');
+            print('   各平台音质: $_pendingPlatformQualities');
           } else {
             _pendingSupportedSources = [];
+            _pendingSupportedQualities = [];
+            _pendingPlatformQualities = {};
           }
         }
         _isScriptReady = true;
@@ -1116,6 +1164,13 @@ class LxScriptInfo {
   
   /// 洛雪格式的支持音源列表 (wy, tx, kg, kw, mg)
   final List<String> supportedSources;
+  
+  /// 脚本支持的音质列表 (128k, 320k, flac, flac24bit)
+  /// 这是所有平台支持音质的并集
+  final List<String> supportedQualities;
+  
+  /// 每个平台支持的音质映射 { 'wy': ['128k', '320k', 'flac'], ... }
+  final Map<String, List<String>> platformQualities;
 
   LxScriptInfo({
     required this.name,
@@ -1125,6 +1180,8 @@ class LxScriptInfo {
     this.homepage = '',
     required this.script,
     this.supportedSources = const [],
+    this.supportedQualities = const [],
+    this.platformQualities = const {},
   });
   
   /// 将洛雪格式的音源代码转换为应用内部平台代码
@@ -1153,7 +1210,12 @@ class LxScriptInfo {
         .cast<String>()
         .toList();
   }
+  
+  /// 获取指定平台支持的音质列表
+  List<String> getQualitiesForPlatform(String lxSource) {
+    return platformQualities[lxSource] ?? supportedQualities;
+  }
 
   @override
-  String toString() => 'LxScriptInfo(name: $name, version: $version, sources: $supportedSources)';
+  String toString() => 'LxScriptInfo(name: $name, version: $version, sources: $supportedSources, qualities: $supportedQualities)';
 }

@@ -45,8 +45,8 @@ class SystemMediaService {
     }
   }
 
-  /// 确保移动端 audio_service 已初始化（首次播放时调用）
-  Future<void> _ensureMobileInitialized() async {
+  /// 确保移动端 audio_service 已初始化（首次播放时或手动同步小部件时调用）
+  Future<void> ensureMobileInitialized() async {
     if (_mobileInitialized || !Platform.isAndroid && !Platform.isIOS) return;
 
     await _initializeMobile();
@@ -84,14 +84,12 @@ class SystemMediaService {
       // 这样可以避免 Android 12+ 的 ForegroundServiceStartNotAllowedException
       _audioHandler = await AudioService.init(
         builder: () => CyreneAudioHandler(),
-        config: const AudioServiceConfig(
+        config: AudioServiceConfig(
           androidNotificationChannelId: 'com.cyrene.music.channel.audio',
           androidNotificationChannelName: 'Cyrene Music',
-          androidNotificationOngoing: false,  // 必须为 false（配合 androidStopForegroundOnPause = false）
-          // 不设置 androidNotificationIcon，使用 audio_service 的默认图标（避免黑色方块）
-          // 如果需要自定义图标，需要在 drawable 目录创建单色透明背景的图标
+          androidNotificationOngoing: false, // 恢复为 false 以符合 audio_service 的断言限制 (androidStopForegroundOnPause 为 false 时必须为 false)
           androidShowNotificationBadge: true,
-          androidStopForegroundOnPause: false,  // 保持服务在前台，避免 Android 12+ 重启问题
+          androidStopForegroundOnPause: false, // 保持核心逻辑：暂停时不停止前台服务，确保应用在 Android 12+ 后台存活
         ),
       ) as CyreneAudioHandler;
       
@@ -151,6 +149,18 @@ class SystemMediaService {
     }
   }
 
+  /// 手动更新移动端小部件（供实验室功能开关调用）
+  Future<void> updateWidget() async {
+    if (Platform.isAndroid) {
+      if (!_mobileInitialized) {
+        await ensureMobileInitialized();
+      }
+      if (_audioHandler != null) {
+        _audioHandler!.refreshWidget();
+      }
+    }
+  }
+
   /// 监听播放器状态变化，同步到系统媒体控件
   void _onPlayerStateChanged() {
     // 如果已释放或未初始化，不再处理
@@ -168,7 +178,7 @@ class SystemMediaService {
       // 只有在真正开始播放时才初始化（loading 或 playing 状态）
       if (player.state == PlayerState.loading || player.state == PlayerState.playing) {
         print('🎵 [SystemMediaService] 检测到首次播放，初始化 audio_service...');
-        _ensureMobileInitialized().then((_) {
+        ensureMobileInitialized().then((_) {
           print('✅ [SystemMediaService] audio_service 初始化完成，继续更新状态');
           // 初始化完成后，再次触发状态更新
           _onPlayerStateChanged();

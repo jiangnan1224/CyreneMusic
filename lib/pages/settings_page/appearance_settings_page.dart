@@ -442,7 +442,7 @@ class _AppearanceSettingsContentState extends State<AppearanceSettingsContent> {
       context: context,
       builder: (context) => CupertinoActionSheet(
         title: const Text('选择全屏播放器样式'),
-        actions: LyricStyle.values.map((style) {
+        actions: LyricStyle.values.where((style) => style != LyricStyle.defaultStyle).map((style) {
           final isSelected = LyricStyleService().currentStyle == style;
           return CupertinoActionSheetAction(
             isDefaultAction: isSelected,
@@ -584,7 +584,7 @@ class _AppearanceSettingsContentState extends State<AppearanceSettingsContent> {
               width: 200,
               child: fluent_ui.ComboBox<LyricStyle>(
                 value: LyricStyleService().currentStyle,
-                items: LyricStyle.values.map((style) {
+                items: LyricStyle.values.where((style) => style != LyricStyle.defaultStyle).map((style) {
                   return fluent_ui.ComboBoxItem<LyricStyle>(
                     value: style,
                     child: Text(LyricStyleService().getStyleName(style)),
@@ -724,6 +724,7 @@ class _AppearanceSettingsContentState extends State<AppearanceSettingsContent> {
       return '${ThemeManager().getThemeColorSource()} (当前跟随系统)';
     }
     final currentIndex = ThemeManager().getCurrentColorIndex();
+    if (currentIndex == -1) return '自定义';
     return ThemeColors.presets[currentIndex].name;
   }
 
@@ -842,118 +843,88 @@ class _AppearanceSettingsContentState extends State<AppearanceSettingsContent> {
   }
 
   void _showThemeColorPicker() {
-    final currentIndex = ThemeManager().getCurrentColorIndex();
-    
+    if (Platform.isAndroid || Platform.isIOS) {
+      _showMobileThemeColorPicker();
+    } else {
+      _showDesktopThemeColorPicker();
+    }
+  }
+
+  void _showMobileThemeColorPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 32,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                '选择主题色',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  child: _ThemeColorGrid(
+                    onColorSelected: () {
+                      Navigator.pop(context);
+                      setState(() {});
+                    },
+                    onCustomTap: () {
+                      Navigator.pop(context);
+                      _showCustomColorPicker();
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDesktopThemeColorPicker() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('选择主题色'),
-        contentPadding: const EdgeInsets.symmetric(vertical: 20),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: GridView.builder(
-            shrinkWrap: true,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              childAspectRatio: 1.2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 450, maxHeight: 600),
+          child: SingleChildScrollView(
+            child: _ThemeColorGrid(
+              onColorSelected: () {
+                Navigator.pop(context);
+                setState(() {});
+              },
+              onCustomTap: () {
+                Navigator.pop(context);
+                _showCustomColorPicker();
+              },
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            itemCount: ThemeColors.presets.length + 1,
-            itemBuilder: (context, index) {
-              if (index == ThemeColors.presets.length) {
-                return InkWell(
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showCustomColorPicker();
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-                        width: 2,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primaryContainer,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.add,
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
-                            size: 28,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '自定义',
-                          style: Theme.of(context).textTheme.bodySmall,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-              
-              final colorScheme = ThemeColors.presets[index];
-              final isSelected = index == currentIndex;
-              
-              return InkWell(
-                onTap: () {
-                  ThemeManager().setSeedColor(colorScheme.color);
-                  Navigator.pop(context);
-                  setState(() {});
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: colorScheme.color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected 
-                          ? colorScheme.color 
-                          : Colors.transparent,
-                      width: 3,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: colorScheme.color,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          isSelected ? Icons.check : colorScheme.icon,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        colorScheme.name,
-                        style: Theme.of(context).textTheme.bodySmall,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
           ),
         ),
         actions: [
@@ -967,16 +938,58 @@ class _AppearanceSettingsContentState extends State<AppearanceSettingsContent> {
   }
 
   void _showCustomColorPicker() {
-    showDialog(
-      context: context,
-      builder: (context) => CustomColorPickerDialog(
-        currentColor: ThemeManager().seedColor,
-        onColorSelected: (color) {
-          ThemeManager().setSeedColor(color);
-          setState(() {});
-        },
-      ),
-    );
+    if (Platform.isAndroid || Platform.isIOS) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.only(
+            top: 12,
+            left: 24,
+            right: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 32,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              CustomColorPickerDialog(
+                isBottomSheet: true,
+                currentColor: ThemeManager().seedColor,
+                onColorSelected: (color) {
+                  ThemeManager().setSeedColor(color);
+                  setState(() {});
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (context) => CustomColorPickerDialog(
+          currentColor: ThemeManager().seedColor,
+          onColorSelected: (color) {
+            ThemeManager().setSeedColor(color);
+            setState(() {});
+          },
+        ),
+      );
+    }
   }
 
   void _showLayoutModeDialog() {
@@ -1090,7 +1103,7 @@ class _AppearanceSettingsContentState extends State<AppearanceSettingsContent> {
         title: const Text('选择全屏播放器样式'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: LyricStyle.values.map((style) {
+          children: LyricStyle.values.where((style) => style != LyricStyle.defaultStyle).map((style) {
             return RadioListTile<LyricStyle>(
               title: Text(LyricStyleService().getStyleName(style)),
               subtitle: Text(LyricStyleService().getStyleDescription(style)),
@@ -1767,6 +1780,180 @@ class _AppearanceSettingsContentState extends State<AppearanceSettingsContent> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ThemeColorGrid extends StatelessWidget {
+  final VoidCallback onColorSelected;
+  final VoidCallback onCustomTap;
+
+  const _ThemeColorGrid({
+    required this.onColorSelected,
+    required this.onCustomTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currentIndex = ThemeManager().getCurrentColorIndex();
+    final theme = Theme.of(context);
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 0.85,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: ThemeColors.presets.length + 1,
+      itemBuilder: (context, index) {
+        if (index == ThemeColors.presets.length) {
+          final isCustomSelected = currentIndex == -1;
+          return _buildCustomButton(context, isCustomSelected);
+        }
+
+        final colorPreset = ThemeColors.presets[index];
+        final isSelected = index == currentIndex;
+
+        return _ColorSwatch(
+          color: colorPreset.color,
+          name: colorPreset.name,
+          icon: colorPreset.icon,
+          isSelected: isSelected,
+          onTap: () {
+            ThemeManager().setSeedColor(colorPreset.color);
+            onColorSelected();
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCustomButton(BuildContext context, bool isSelected) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.primary;
+    
+    return InkWell(
+      onTap: onCustomTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 52,
+            height: 52,
+            padding: EdgeInsets.all(isSelected ? 3 : 0),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: isSelected 
+                  ? Border.all(color: color, width: 2)
+                  : null,
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                shape: BoxShape.circle,
+                boxShadow: isSelected ? [
+                  BoxShadow(
+                    color: color.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  )
+                ] : null,
+              ),
+              child: Icon(
+                isSelected ? Icons.check : Icons.add,
+                color: color,
+                size: 26,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '自定义',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: isSelected ? color : theme.colorScheme.onSurfaceVariant,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ColorSwatch extends StatelessWidget {
+  final Color color;
+  final String name;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ColorSwatch({
+    required this.color,
+    required this.name,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 52,
+            height: 52,
+            padding: EdgeInsets.all(isSelected ? 3 : 0),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: isSelected 
+                  ? Border.all(color: color, width: 2)
+                  : null,
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: isSelected ? [
+                  BoxShadow(
+                    color: color.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  )
+                ] : null,
+              ),
+              child: Icon(
+                isSelected ? Icons.check : icon,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            name,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: isSelected ? color : theme.colorScheme.onSurfaceVariant,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

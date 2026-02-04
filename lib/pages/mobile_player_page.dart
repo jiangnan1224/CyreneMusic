@@ -16,6 +16,8 @@ import 'mobile_player_components/mobile_player_karaoke_lyric.dart';
 import 'mobile_player_components/mobile_player_fluid_cloud_layout.dart';
 import 'mobile_player_components/mobile_player_classic_layout.dart';
 import 'mobile_player_components/mobile_player_dialogs.dart';
+import 'mobile_player_components/mobile_player_settings_sheet.dart';
+import 'player_components/player_immersive_layout.dart';
 import '../../services/lyric_style_service.dart';
 
 /// 移动端播放器页面（重构版本）
@@ -45,6 +47,47 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
     _initializeAnimations();
     _setupListeners();
     _initializeData();
+    // 初始检查：如果当前已经是沉浸模式，强制横屏
+    _checkAndForceOrientation();
+  }
+
+  /// 根据当前歌词样式检查并强制设置屏幕方向
+  void _checkAndForceOrientation() {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    
+    if (LyricStyleService().currentStyle == LyricStyle.immersive) {
+      print('📱 [MobilePlayerPage] 进入沉浸模式，强制横屏并隐藏状态栏');
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      // 进入全屏沉浸模式，隐藏状态栏和虚拟按键
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      // 恢复系统默认（跟随重力感应或恢复到原本的设置，这里设为所有方向以解除锁定）
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      // 恢复状态栏和虚拟按键显示
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+  }
+
+  /// 恢复到默认竖屏（用于关闭播放器时）
+  void _resetOrientation() {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    print('📱 [MobilePlayerPage] 离开播放页，恢复默认方向');
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    // 确保退出时恢复状态栏
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
 
   /// 是否应该显示译文按钮（与全屏歌词页一致逻辑）
@@ -63,6 +106,7 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
 
   @override
   void dispose() {
+    _resetOrientation();
     _disposeAnimations();
     _removeListeners();
     super.dispose();
@@ -95,7 +139,10 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
   }
 
   void _onLyricStyleChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      _checkAndForceOrientation();
+      setState(() {});
+    }
   }
 
   /// 释放动画控制器
@@ -372,14 +419,39 @@ class _MobilePlayerPageState extends State<MobilePlayerPage> with TickerProvider
     // 流体云布局条件：全屏播放器样式设置为流体云（优先级最高）
     final useFluidCloudLayout = lyricStyleService.currentStyle == LyricStyle.fluidCloud;
     
+    // 动态处理状态栏：如果是沉浸模式，或者在流体云样式下的横屏，则隐藏状态栏
+    final isImmersive = lyricStyleService.currentStyle == LyricStyle.immersive;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    
+    if (isImmersive || (useFluidCloudLayout && isLandscape)) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+
     final scaffoldWidget = AnnotatedRegion<SystemUiOverlayStyle>(
       value: playerOverlayStyle,
       child: Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
             children: [
+              // 沉浸模式布局：复用桌面端组件
+              if (lyricStyleService.currentStyle == LyricStyle.immersive)
+                PlayerImmersiveLayout(
+                  lyrics: _lyrics,
+                  currentLyricIndex: _currentLyricIndex,
+                  showTranslation: _showTranslation,
+                  isMaximized: true,
+                  uiScale: 0.5, // 适配移动端，缩小 50%
+                  onBackPressed: () => Navigator.pop(context),
+                  onMorePressed: () => MobilePlayerSettingsSheet.show(context),
+                  onPlaylistPressed: () => MobilePlayerDialogs.showPlaylistBottomSheet(context),
+                  onVolumeControlPressed: () {
+                    // 移动端通过系统按键控制音量，此处保持为空
+                  },
+                )
               // 流体云布局模式：完全接管背景和 Safe Area
-              if (useFluidCloudLayout)
+              else if (useFluidCloudLayout)
                 _buildAppleMusicStyleLayout(context, const BoxConstraints())
               else ...[
                 // 标准布局模式：原有背景 + Safe Area

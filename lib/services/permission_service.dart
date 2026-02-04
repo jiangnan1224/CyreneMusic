@@ -51,6 +51,35 @@ class PermissionService {
     }
   }
 
+  /// 请求忽略电池优化 (Android 专用)
+  /// 这有助于防止后台播放因 CPU 被挂起而卡顿
+  Future<bool> requestIgnoreBatteryOptimizations() async {
+    if (!Platform.isAndroid) return true;
+
+    try {
+      final status = await Permission.ignoreBatteryOptimizations.status;
+      if (status.isGranted) {
+        print('✅ [PermissionService] 电池优化已忽略');
+        return true;
+      }
+
+      print('🔋 [PermissionService] 尝试请求忽略电池优化...');
+      // 弹出请求对话框
+      final result = await Permission.ignoreBatteryOptimizations.request();
+      
+      if (result.isGranted) {
+        print('✅ [PermissionService] 用户授予了忽略电池优化权限');
+        return true;
+      } else {
+        print('⚠️ [PermissionService] 用户未授予忽略电池优化权限');
+        return false;
+      }
+    } catch (e) {
+      print('❌ [PermissionService] 请求电池优化异常: $e');
+      return false;
+    }
+  }
+
   /// 显示权限说明对话框并跳转到设置
   Future<void> showPermissionDialog(BuildContext context) async {
     return showDialog(
@@ -94,10 +123,12 @@ class PermissionService {
       if (context.mounted) {
         await showPermissionDialog(context);
       }
-      return false;
     }
 
-    return true;
+    // 🍎 额外请求忽略电池优化（非强制，不阻断面流程）
+    await requestIgnoreBatteryOptimizations();
+
+    return hasNotificationPermission;
   }
 }
 

@@ -39,6 +39,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // 默认应用名称
+        manifestPlaceholders["appName"] = "Cyrene Music"
     }
 
     signingConfigs {
@@ -67,10 +70,17 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Debug 版本增加后缀，实现共存
+            applicationIdSuffix = ".debug"
+            manifestPlaceholders["appName"] = "Cyrene Music (Debug)"
+        }
+
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("release")
+            manifestPlaceholders["appName"] = "Cyrene Music"
         }
     }
 }

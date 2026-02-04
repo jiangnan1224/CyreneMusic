@@ -254,116 +254,57 @@ class _MeshGradientPainter extends CustomPainter {
     // 映射颜色：确保至少有 5 个颜色
     final activeColors = colors;
     
-    // 定义 5 个光斑的配置
-    final blobConfigs = [
-      // Blob 1: 左上，金黄色/橙色变体
-      _BlobConfig(
-        basePos: const Offset(-0.1, -0.1),
-        sizeRatio: 0.5 * (longestSide / shortestSide),
-        speed: 1.0,
-        blendMode: BlendMode.screen,
-        moveFn: (time, i) {
-          return Offset(
-            0.2 * math.sin(time * 0.3),
-            0.2 * math.cos(time * 0.2),
-          );
-        },
-        scaleFn: (time) => 1.0 + 0.2 * math.sin(time * 0.4),
-      ),
-      // Blob 2: 左下，艳丽玫红色变体
-      _BlobConfig(
-        basePos: const Offset(-0.1, 1.1),
-        sizeRatio: 0.6 * (longestSide / shortestSide),
-        speed: 0.8,
-        blendMode: BlendMode.screen,
-        moveFn: (time, i) {
-          return Offset(
-            0.25 * math.cos(time * 0.25),
-            -0.2 * math.sin(time * 0.3),
-          );
-        },
-        rotateFn: (time) => time * 0.2,
-      ),
-      // Blob 3: 右上，淡蓝色/青色变体
-      _BlobConfig(
-        basePos: const Offset(1.1, -0.2),
-        sizeRatio: 0.55 * (longestSide / shortestSide),
-        speed: 0.9,
-        blendMode: BlendMode.screen,
-        moveFn: (time, i) {
-          return Offset(
-            -0.2 * math.sin(time * 0.35),
-            0.25 * math.cos(time * 0.2),
-          );
-        },
-        scaleFn: (time) => 1.0 + 0.3 * math.sin(time * 0.3),
-      ),
-      // Blob 4: 右下，深蓝紫色变体
-      _BlobConfig(
-        basePos: const Offset(1.2, 1.2),
-        sizeRatio: 0.7 * (longestSide / shortestSide),
-        speed: 0.7,
-        blendMode: BlendMode.screen,
-        moveFn: (time, i) {
-          return Offset(
-            -0.25 * math.cos(time * 0.2),
-            -0.25 * math.sin(time * 0.25),
-          );
-        },
-        scaleFn: (time) => 0.8 + 0.2 * math.cos(time * 0.3),
-      ),
-      // Blob 5: 中间，高光
-      _BlobConfig(
-        basePos: const Offset(0.5, 0.5),
-        sizeRatio: 0.4 * (longestSide / shortestSide),
-        speed: 1.25,
-        blendMode: BlendMode.overlay,
-        moveFn: (time, i) {
-          return Offset(
-            0.2 * math.sin(time * 0.5),
-            -0.2 * math.cos(time * 0.4),
-          );
-        },
-        scaleFn: (time) => 1.0 + 0.4 * math.sin(time * 0.5),
-        opacity: 0.6,
-      ),
-    ];
+    // ✅ 优化 0：配置静态化，消除每帧分配
+    final blobConfigs = _blobConfigs;
 
-    for (int i = 0; i < 5; i++) {
+    // ✅ 优化 1：根据平台自动调整绘制的光斑数量
+    // 移动端通常只绘制前 3 个光斑，足以覆盖大部分视野并具有良好的运动感
+    final bool isMobile = Platform.isAndroid || Platform.isIOS;
+    final int blobCount = isMobile ? 3 : 5;
+    
+    // ✅ 优化 2：预先提取颜色 HSL 提升效率
+    final List<Color> boostedColors = colors.map((color) {
+      final hsl = HSLColor.fromColor(color);
+      return hsl
+          .withSaturation((hsl.saturation + 0.1).clamp(0.4, 1.0))
+          .withLightness((hsl.lightness + 0.05).clamp(0.3, 0.9))
+          .toColor();
+    }).toList();
+
+    for (int i = 0; i < blobCount; i++) {
       final config = blobConfigs[i];
-      final color = activeColors[i % activeColors.length];
+      final color = boostedColors[i % boostedColors.length];
       
-      final offset = config.moveFn(time, i);
-      final centerX = size.width * (config.basePos.dx + offset.dx);
-      final centerY = size.height * (config.basePos.dy + offset.dy);
+      // ✅ 优化 3：使用内联数学公式替代闭包函数调用，消除每帧函数开销
+      final double dx = config.moveFactor.dx * math.sin(time * config.moveSpeed.dx);
+      final double dy = config.moveFactor.dy * math.cos(time * config.moveSpeed.dy);
       
-      double radius = shortestSide * config.sizeRatio;
-      if (config.scaleFn != null) {
-        radius *= config.scaleFn!(time);
-      }
+      final centerX = size.width * (config.basePos.dx + dx);
+      final centerY = size.height * (config.basePos.dy + dy);
+      
+      // 这里的 sizeRatio 在 mobile 上适当减小以降低像素填充率
+      double radius = shortestSide * config.sizeRatio * (isMobile ? 0.8 : 1.0);
+      
+      final double scale = config.scaleBase + config.scaleRange * math.sin(time * config.scaleSpeed);
+      radius *= scale;
       
       // 律动加成
       radius += (shortestSide * 0.1) * bassIntensity;
       
       if (radius < 10) radius = 10;
 
-      final hsl = HSLColor.fromColor(color);
-      final boostedColor = hsl
-          .withSaturation((hsl.saturation + 0.1).clamp(0.4, 1.0))
-          .withLightness((hsl.lightness + 0.05).clamp(0.3, 0.9))
-          .toColor();
-
       final paintBlob = Paint()
         ..blendMode = config.blendMode
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, (radius * 0.4).clamp(40, 150));
+        // ✅ 优化 4：严格限制移动端的模糊半径上限，平衡视觉与性能
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, (radius * 0.35).clamp(15.0, isMobile ? 45.0 : 80.0));
 
       final gradient = ui.Gradient.radial(
         Offset(centerX, centerY),
         radius,
         [
-          boostedColor.withOpacity(config.opacity),
-          boostedColor.withOpacity(config.opacity * 0.5),
-          boostedColor.withOpacity(0.0),
+          color.withOpacity(config.opacity),
+          color.withOpacity(config.opacity * 0.5),
+          color.withOpacity(0.0),
         ],
         const [0.0, 0.4, 1.0],
       );
@@ -371,15 +312,72 @@ class _MeshGradientPainter extends CustomPainter {
       paintBlob.shader = gradient;
 
       canvas.save();
-      if (config.rotateFn != null) {
+      if (config.rotateSpeed != 0) {
         canvas.translate(centerX, centerY);
-        canvas.rotate(config.rotateFn!(time));
+        canvas.rotate(time * config.rotateSpeed);
         canvas.translate(-centerX, -centerY);
       }
       canvas.drawCircle(Offset(centerX, centerY), radius, paintBlob);
       canvas.restore();
     }
   }
+
+  static const List<_BlobConfig> _blobConfigs = [
+    _BlobConfig(
+      basePos: Offset(-0.1, -0.1),
+      sizeRatio: 0.6,
+      speed: 1.0,
+      blendMode: BlendMode.screen,
+      moveFactor: Offset(0.2, 0.2),
+      moveSpeed: Offset(0.3, 0.2),
+      scaleBase: 1.0,
+      scaleRange: 0.2,
+      scaleSpeed: 0.4,
+    ),
+    _BlobConfig(
+      basePos: Offset(-0.1, 1.1),
+      sizeRatio: 0.7,
+      speed: 0.8,
+      blendMode: BlendMode.screen,
+      moveFactor: Offset(0.25, -0.2),
+      moveSpeed: Offset(0.25, 0.3),
+      rotateSpeed: 0.2,
+    ),
+    _BlobConfig(
+      basePos: Offset(1.1, -0.2),
+      sizeRatio: 0.65,
+      speed: 0.9,
+      blendMode: BlendMode.screen,
+      moveFactor: Offset(-0.2, 0.25),
+      moveSpeed: Offset(0.35, 0.2),
+      scaleBase: 1.0,
+      scaleRange: 0.3,
+      scaleSpeed: 0.3,
+    ),
+    _BlobConfig(
+      basePos: Offset(1.2, 1.2),
+      sizeRatio: 0.8,
+      speed: 0.7,
+      blendMode: BlendMode.screen,
+      moveFactor: Offset(-0.25, -0.25),
+      moveSpeed: Offset(0.2, 0.25),
+      scaleBase: 0.8,
+      scaleRange: 0.2,
+      scaleSpeed: 0.3,
+    ),
+    _BlobConfig(
+      basePos: Offset(0.5, 0.5),
+      sizeRatio: 0.5,
+      speed: 1.25,
+      blendMode: BlendMode.overlay,
+      moveFactor: Offset(0.2, -0.2),
+      moveSpeed: Offset(0.5, 0.4),
+      scaleBase: 1.0,
+      scaleRange: 0.4,
+      scaleSpeed: 0.5,
+      opacity: 0.6,
+    ),
+  ];
 
   @override
   bool shouldRepaint(_MeshGradientPainter oldDelegate) => 
@@ -393,19 +391,26 @@ class _BlobConfig {
   final double sizeRatio;
   final double speed;
   final BlendMode blendMode;
-  final Offset Function(double time, int index) moveFn;
-  final double Function(double time)? scaleFn;
-  final double Function(double time)? rotateFn;
+  // 优化：将闭包改为结构化参数
+  final Offset moveFactor;
+  final Offset moveSpeed;
+  final double scaleBase;
+  final double scaleRange;
+  final double scaleSpeed;
+  final double rotateSpeed;
   final double opacity;
 
-  _BlobConfig({
+  const _BlobConfig({
     required this.basePos,
     required this.sizeRatio,
     required this.speed,
     required this.blendMode,
-    required this.moveFn,
-    this.scaleFn,
-    this.rotateFn,
+    this.moveFactor = const Offset(0.2, 0.2),
+    this.moveSpeed = const Offset(0.3, 0.3),
+    this.scaleBase = 1.0,
+    this.scaleRange = 0.0,
+    this.scaleSpeed = 0.0,
+    this.rotateSpeed = 0.0,
     this.opacity = 0.8,
   });
 }

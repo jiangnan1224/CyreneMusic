@@ -26,7 +26,10 @@ import 'settings_page/third_party_accounts_page.dart';
 import 'settings_page/lyric_settings_page.dart';
 import 'settings_page/audio_source_settings_page.dart';
 import 'settings_page/about_settings_page.dart';
+import 'settings_page/equalizer_page.dart';
 import 'support_page.dart';
+import 'settings_page/lab_functions.dart';
+import 'settings_page/lab_functions_page.dart';
 import '../widgets/material/material_settings_widgets.dart';
 import '../widgets/fluent_settings_card.dart';
 
@@ -37,6 +40,7 @@ enum SettingsSubPage {
   lyric,
   audioSource,
   about,
+  labFunctions,
 }
 
 /// 设置页面
@@ -216,6 +220,9 @@ class _SettingsPageState extends State<SettingsPage> {
       case SettingsSubPage.about:
         content = AboutSettingsContent(onBack: () => Navigator.pop(context), embed: true);
         title = '关于';
+      case SettingsSubPage.labFunctions:
+        content = LabFunctionsContent(onBack: () => Navigator.pop(context), embed: true);
+        title = '实验室功能';
       case SettingsSubPage.none:
         return const SizedBox.shrink();
     }
@@ -331,6 +338,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     _buildSupportTile(context),
                     const SizedBox(height: 12),
                     
+                    // 实验室功能
+                    LabFunctions(onTap: () => openSubPage(SettingsSubPage.labFunctions)),
+                    const SizedBox(height: 12),
+                    
                     // 第三方账号管理（需随登录状态刷新，不能使用 const）
                     ThirdPartyAccounts(onTap: () => openSubPage(SettingsSubPage.thirdPartyAccounts)),
                     const SizedBox(height: 12),
@@ -413,6 +424,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return '音源设置';
       case SettingsSubPage.about:
         return '关于';
+      case SettingsSubPage.labFunctions:
+        return '实验室功能';
       case SettingsSubPage.none:
         return '设置';
     }
@@ -430,6 +443,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return AudioSourceSettingsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.about:
         return AboutSettingsContent(onBack: closeSubPage, embed: true);
+      case SettingsSubPage.labFunctions:
+        return LabFunctionsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.none:
         return const SizedBox.shrink();
     }
@@ -548,9 +563,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 context,
                 isDark: isDark,
                 header: '播放',
-                children: const [
-                  PlaybackSettings(),
-                  SearchSettings(),
+                children: [
+                  const SearchSettings(),
                 ],
               ),
               
@@ -779,6 +793,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return AudioSourceSettingsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.about:
         return AboutSettingsContent(onBack: closeSubPage, embed: true);
+      case SettingsSubPage.labFunctions:
+        return LabFunctionsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.none:
         return const SizedBox.shrink();
     }
@@ -797,19 +813,24 @@ class _SettingsPageState extends State<SettingsPage> {
         transitionBuilder: (Widget child, Animation<double> animation) {
           // 简单的左右滑动效果
           final isMain = child.key == const ValueKey('main_settings');
+          final isSub = child.key is ValueKey<String> && (child.key as ValueKey<String>).value.startsWith('sub_settings_');
+          
           final offset = isMain
-              ? const Offset(-1.0, 0.0) // 主页面从左侧进入/退出
-              : const Offset(1.0, 0.0); // 子页面从右侧进入/退出
+              ? const Offset(-0.2, 0.0) // 主页面移出时略微向左
+              : (isSub ? const Offset(0.2, 0.0) : const Offset(1.0, 0.0)); // 子页面进入时从右侧拉入
               
-          return SlideTransition(
-            position: Tween<Offset>(
-              begin: offset,
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeInOutCubic, // 统一使用 easeInOutCubic
-            )),
-            child: child,
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: offset,
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeInOutCubic,
+              )),
+              child: child,
+            ),
           );
         },
         child: _currentSubPage != SettingsSubPage.none
@@ -819,74 +840,57 @@ class _SettingsPageState extends State<SettingsPage> {
               )
             : KeyedSubtree(
                 key: const ValueKey('main_settings'),
-                child: fluent_ui.ListView(
-                  padding: const EdgeInsets.all(24.0),
-                  children: [
-                    // 用户卡片
-                    UserCard(),
-                    const SizedBox(height: 16),
-                    
-                    // 赞助与支持
-                    _buildFluentSupportTile(context),
-                    const SizedBox(height: 16),
-                    
-                    // 第三方账号管理
-                    ThirdPartyAccounts(onTap: () => openSubPage(SettingsSubPage.thirdPartyAccounts)),
-                    const SizedBox(height: 16),
-                    
-                    // 外观设置
-                    AppearanceSettings(onTap: () => openSubPage(SettingsSubPage.appearance)),
-                    const SizedBox(height: 16),
-                    
-                    // 歌词设置
-                    LyricSettings(onTap: () => openSubPage(SettingsSubPage.lyric)),
-                    const SizedBox(height: 16),
-                    
-                    // 播放设置
-                    const PlaybackSettings(),
-                    const SizedBox(height: 16),
-                    
-                    // 搜索设置
-                    const SearchSettings(),
-                    const SizedBox(height: 16),
-                    
-                    // 网络设置
-                    NetworkSettings(onAudioSourceTap: () => openSubPage(SettingsSubPage.audioSource)),
-                    const SizedBox(height: 16),
-                    
-                    // 存储设置
-                    const StorageSettings(),
-                    const SizedBox(height: 16),
-                    
-                    // 关于
-                    const AboutSettings(),
-                    const SizedBox(height: 16),
-                    const SizedBox(height: 40),
-                  ],
-                ),
+                child: _buildFluentMainContent(context),
               ),
       ),
     );
   }
-  
-  Widget _buildFluentHeader(BuildContext context) {
-    switch (_currentSubPage) {
-      case SettingsSubPage.appearance:
-        return AppearanceSettingsContent(onBack: closeSubPage).buildFluentBreadcrumb(context);
-      case SettingsSubPage.thirdPartyAccounts:
-        return ThirdPartyAccountsContent(onBack: closeSubPage).buildFluentBreadcrumb(context);
-      case SettingsSubPage.lyric:
-        return LyricSettingsContent(onBack: closeSubPage).buildFluentBreadcrumb(context);
-      case SettingsSubPage.audioSource:
-        return AudioSourceSettingsContent(onBack: closeSubPage).buildFluentBreadcrumb(context);
-      case SettingsSubPage.about:
-        return AboutSettingsContent(onBack: closeSubPage).buildFluentBreadcrumb(context);
-      case SettingsSubPage.none:
-        return const Text('设置');
-    }
+
+  /// 构建 Fluent UI 主内容列表
+  Widget _buildFluentMainContent(BuildContext context) {
+    return fluent_ui.ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 0),
+      children: [
+        // 用户卡片
+        UserCard(),
+        const SizedBox(height: 16),
+        
+        // 赞助与支持
+        _buildFluentSupportTile(context),
+        const SizedBox(height: 16),
+
+        // 实验室功能
+        LabFunctions(onTap: () => openSubPage(SettingsSubPage.labFunctions)),
+        const SizedBox(height: 16),
+        
+        // 分组设置
+        ThirdPartyAccounts(onTap: () => openSubPage(SettingsSubPage.thirdPartyAccounts)),
+        const SizedBox(height: 16),
+        
+        AppearanceSettings(onTap: () => openSubPage(SettingsSubPage.appearance)),
+        const SizedBox(height: 16),
+        
+        LyricSettings(onTap: () => openSubPage(SettingsSubPage.lyric)),
+        const SizedBox(height: 16),
+        
+        const PlaybackSettings(),
+        const SizedBox(height: 16),
+        
+        const SearchSettings(),
+        const SizedBox(height: 16),
+        
+        NetworkSettings(onAudioSourceTap: () => openSubPage(SettingsSubPage.audioSource)),
+        const SizedBox(height: 16),
+        
+        const StorageSettings(),
+        const SizedBox(height: 16),
+        
+        AboutSettings(onTap: () => openSubPage(SettingsSubPage.about)),
+        const SizedBox(height: 40),
+      ],
+    );
   }
-  
-  /// 构建 Fluent UI 子页面
+
   Widget _buildFluentSubPage(BuildContext context) {
     switch (_currentSubPage) {
       case SettingsSubPage.appearance:
@@ -899,8 +903,65 @@ class _SettingsPageState extends State<SettingsPage> {
         return AudioSourceSettingsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.about:
         return AboutSettingsContent(onBack: closeSubPage, embed: true);
+      case SettingsSubPage.labFunctions:
+        return LabFunctionsContent(onBack: closeSubPage, embed: true);
       case SettingsSubPage.none:
         return const SizedBox.shrink();
     }
+  }
+
+  /// 构建 Fluent UI 二级页面标题
+  Widget _buildFluentHeader(BuildContext context) {
+    final theme = fluent_ui.FluentTheme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    String pageName = '';
+    switch (_currentSubPage) {
+      case SettingsSubPage.appearance: pageName = '外观'; break;
+      case SettingsSubPage.thirdPartyAccounts: pageName = '第三方账号'; break;
+      case SettingsSubPage.lyric: pageName = '歌词'; break;
+      case SettingsSubPage.audioSource: pageName = '音源设置'; break;
+      case SettingsSubPage.about: pageName = '关于'; break;
+      case SettingsSubPage.labFunctions: pageName = '实验室功能'; break;
+      case SettingsSubPage.none: return const Text('设置');
+    }
+
+    return Row(
+      children: [
+        fluent_ui.Tooltip(
+          message: '返回',
+          child: fluent_ui.IconButton(
+            icon: const Icon(fluent_ui.FluentIcons.back),
+            onPressed: closeSubPage,
+          ),
+        ),
+        const SizedBox(width: 8),
+        MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: closeSubPage,
+            child: Text(
+              '设置',
+              style: theme.typography.title?.copyWith(
+                color: theme.resources.textFillColorSecondary,
+                fontSize: 20,
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Icon(
+            fluent_ui.FluentIcons.chevron_right,
+            size: 12,
+            color: theme.resources.textFillColorSecondary,
+          ),
+        ),
+        Text(
+          pageName,
+          style: theme.typography.title?.copyWith(fontSize: 20),
+        ),
+      ],
+    );
   }
 }

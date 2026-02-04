@@ -613,6 +613,7 @@ class AuthService extends ChangeNotifier {
       final data = jsonDecode(response.body);
       print('🔍 [AuthService] 后端返回数据: ${jsonEncode(data['data'])}');
       print('🖼️ [AuthService] 头像URL: ${data['data']?['avatarUrl']}');
+      DeveloperModeService().addLog('🖼️ [Auth] Linux Do 头像 URL: ${data['data']?['avatarUrl']}');
       
       if (response.statusCode == 200) {
         _currentUser = User.fromJson(data['data']);
@@ -661,6 +662,7 @@ class AuthService extends ChangeNotifier {
       final data = jsonDecode(response.body);
       print('🔍 [AuthService] 后端返回数据: ${jsonEncode(data['data'])}');
       print('🖼️ [AuthService] 头像URL: ${data['data']?['avatarUrl']}');
+      DeveloperModeService().addLog('🖼️ [Auth] Linux Do 头像 URL: ${data['data']?['avatarUrl']}');
 
       if (response.statusCode == 200) {
         _currentUser = User.fromJson(data['data']);

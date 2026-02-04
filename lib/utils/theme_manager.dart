@@ -754,14 +754,14 @@ class ThemeManager extends ChangeNotifier {
     }
   }
 
-  /// 获取当前主题色在预设列表中的索引
+  /// 获取当前主题色在预设列表中的索引，如果不在预设列表中（自定义颜色）则返回 -1
   int getCurrentColorIndex() {
     for (int i = 0; i < ThemeColors.presets.length; i++) {
       if (ThemeColors.presets[i].color.value == _seedColor.value) {
         return i;
       }
     }
-    return 0; // 默认返回第一个
+    return -1; // -1 表示自定义颜色
   }
 
   /// 获取主题色来源描述

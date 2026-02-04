@@ -9,6 +9,7 @@ import '../models/track.dart';
 import '../models/song_detail.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
+import 'audio_quality_service.dart';
 
 /// 缓存元数据模型
 class CacheMetadata {
@@ -269,12 +270,9 @@ class CacheService extends ChangeNotifier {
       track.source,
     );
 
-    if (!_cacheIndex.containsKey(cacheKey)) {
-      return null;
-    }
-
     final cacheFilePath = _getCacheFilePath(cacheKey);
     final cacheFile = File(cacheFilePath);
+    final metadata = _cacheIndex[cacheKey]!;
 
     if (!await cacheFile.exists()) {
       print('⚠️ [CacheService] 缓存文件不存在: $cacheFilePath');
@@ -310,9 +308,12 @@ class CacheService extends ChangeNotifier {
       // 解密音频数据
       final decryptedData = _decryptData(encryptedAudioData);
 
+      // 🔍 优化：根据音质选择正确的文件后缀
+      final extension = AudioQualityService.getExtensionFromLevel(metadata.quality);
+
       // 创建临时文件
       final tempDir = await getTemporaryDirectory();
-      final tempFilePath = '${tempDir.path}/temp_${cacheKey}_${DateTime.now().millisecondsSinceEpoch}.mp3';
+      final tempFilePath = '${tempDir.path}/temp_${cacheKey}_${DateTime.now().millisecondsSinceEpoch}.$extension';
       final tempFile = File(tempFilePath);
       await tempFile.writeAsBytes(decryptedData);
 
@@ -610,11 +611,14 @@ class CacheService extends ChangeNotifier {
       final files = await tempDir.list().toList();
 
       for (final file in files) {
-        if (file is File && file.path.contains('temp_') && file.path.endsWith('.mp3')) {
-          try {
-            await file.delete();
-          } catch (e) {
-            // 忽略删除失败的文件
+        if (file is File && file.path.contains('temp_')) {
+          final isAudioTemp = file.path.endsWith('.mp3') || file.path.endsWith('.flac');
+          if (isAudioTemp) {
+            try {
+              await file.delete();
+            } catch (e) {
+              // 忽略删除失败的文件
+            }
           }
         }
       }

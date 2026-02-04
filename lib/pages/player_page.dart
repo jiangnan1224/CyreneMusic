@@ -18,6 +18,7 @@ import 'player_components/player_lyrics_panel.dart';
 import 'player_components/player_karaoke_lyrics_panel.dart';
 import 'player_components/player_fluid_cloud_lyrics_panel.dart';
 import 'player_components/player_fluid_cloud_layout.dart'; // 导入新布局
+import 'player_components/player_immersive_layout.dart'; // 导入沉浸样式布局
 import 'player_components/player_controls.dart';
 import 'player_components/player_playlist_panel.dart';
 import 'player_components/player_control_center.dart';
@@ -359,6 +360,11 @@ class _PlayerPageState extends State<PlayerPage> with WindowListener, TickerProv
           currentLyricIndex: _currentLyricIndex,
           showTranslation: _showTranslation,
         );
+
+      case LyricStyle.immersive:
+        // 在沉浸模式下，歌词面板已集成在布局中或由布局单独处理
+        // 这里返回空展示，真正的歌词显示逻辑在 PlayerImmersiveLayout 中
+        return const SizedBox.shrink();
     }
   }
 
@@ -400,6 +406,18 @@ class _PlayerPageState extends State<PlayerPage> with WindowListener, TickerProv
             // 主要内容区域 (根据样式切换)
             if (LyricStyleService().currentStyle == LyricStyle.fluidCloud)
               PlayerFluidCloudLayout(
+                lyrics: _lyrics,
+                currentLyricIndex: _currentLyricIndex,
+                showTranslation: _showTranslation,
+                isMaximized: _isMaximized,
+                onBackPressed: () => Navigator.pop(context),
+                onPlaylistPressed: _togglePlaylist,
+                onVolumeControlPressed: _toggleControlCenter,
+                onSleepTimerPressed: () => PlayerDialogs.showSleepTimer(context),
+                onTranslationToggle: _toggleTranslation,
+              )
+            else if (LyricStyleService().currentStyle == LyricStyle.immersive)
+              PlayerImmersiveLayout(
                 lyrics: _lyrics,
                 currentLyricIndex: _currentLyricIndex,
                 showTranslation: _showTranslation,

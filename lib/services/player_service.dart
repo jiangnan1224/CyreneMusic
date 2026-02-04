@@ -35,6 +35,10 @@ import 'notification_service.dart';
 import 'persistent_storage_service.dart';
 import 'dart:async' as async_lib;
 import 'dart:async' show TimeoutException;
+import '../utils/toast_utils.dart';
+import '../utils/metadata_reader.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+
 
 /// 播放状态枚举
 enum PlayerState {
@@ -54,6 +58,10 @@ class PlayerService extends ChangeNotifier {
   ap.AudioPlayer? _audioPlayer; // 延迟初始化，避免启动时杂音
   mk.Player? _mediaKitPlayer;
   bool _useMediaKit = false;
+  
+  // 判断当前平台是否应该使用 MediaKit
+  bool get _shouldUseMediaKit => Platform.isWindows || Platform.isMacOS || Platform.isLinux || Platform.isAndroid;
+
   async_lib.StreamSubscription<bool>? _mediaKitPlayingSub;
   async_lib.StreamSubscription<Duration>? _mediaKitPositionSub;
   async_lib.StreamSubscription<Duration?>? _mediaKitDurationSub;
@@ -91,6 +99,14 @@ class PlayerService extends ChangeNotifier {
   
   // 音源未配置回调（用于 UI 显示弹窗）
   void Function()? onAudioSourceNotConfigured;
+  
+  // 均衡器相关
+  static const List<int> kEqualizerFrequencies = [31, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+  List<double> _equalizerGains = List.filled(10, 0.0);
+  bool _equalizerEnabled = true;
+  
+  List<double> get equalizerGains => List.unmodifiable(_equalizerGains);
+  bool get equalizerEnabled => _equalizerEnabled;
 
   PlayerState get state => _state;
   SongDetail? get currentSong => _currentSong;
@@ -158,6 +174,21 @@ class PlayerService extends ChangeNotifier {
       print('🔊 [PlayerService] 使用默认音量: ${(_volume * 100).toInt()}%');
     }
 
+    // 加载均衡器设置
+    final savedEqGains = PersistentStorageService().getStringList('player_eq_gains');
+    if (savedEqGains != null && savedEqGains.length == 10) {
+      try {
+        _equalizerGains = savedEqGains.map((e) => double.tryParse(e) ?? 0.0).toList();
+        print('🎚️ [PlayerService] 已加载均衡器设置');
+      } catch (e) {
+        print('⚠️ [PlayerService] 加载均衡器设置失败: $e');
+      }
+    }
+    final savedEqEnabled = PersistentStorageService().getBool('player_eq_enabled');
+    if (savedEqEnabled != null) {
+      _equalizerEnabled = savedEqEnabled;
+    }
+
     // 设置桌面歌词播放控制回调（Windows）
     if (Platform.isWindows) {
       DesktopLyricService().setPlaybackControlCallback((action) {
@@ -190,7 +221,16 @@ class PlayerService extends ChangeNotifier {
     print('🎵 [PlayerService] 播放器初始化完成');
   }
 
-  /// 确保 AudioPlayer 已初始化（首次播放时调用）
+  /// 确保播放器已初始化（首次播放时调用）
+  Future<void> _ensurePlayerInitialized() async {
+    if (_shouldUseMediaKit) {
+      await _ensureMediaKitPlayer();
+    } else {
+      await _ensureAudioPlayerInitialized();
+    }
+  }
+
+  /// 确保 AudioPlayer 已初始化（仅用于 iOS/Web 等非 MediaKit 平台）
   Future<void> _ensureAudioPlayerInitialized() async {
     if (_audioPlayer != null) return;
 
@@ -312,8 +352,11 @@ class PlayerService extends ChangeNotifier {
     bool fromPlaylist = false,
   }) async {
     try {
-      // 🔧 关键修复：首次播放时才初始化 AudioPlayer，避免启动时的杂音
-      await _ensureAudioPlayerInitialized();
+      // 🔧 关键修复：首次播放时才初始化播放器，避免启动时的杂音
+      await _ensurePlayerInitialized();
+      
+      // 设置使用 MediaKit 标志
+      _useMediaKit = _shouldUseMediaKit;
 
       // ✅ 提前检查音源配置（仅对在线音乐）
       // 本地音乐不需要音源，直接跳过此检查
@@ -346,6 +389,11 @@ class PlayerService extends ChangeNotifier {
         
         // 通知用户（通过回调或事件）
         _notifyAppleMusicRestriction(track);
+        
+        // 移动端弹出 Toast 提示
+        if (Platform.isAndroid || Platform.isIOS) {
+          ToastUtils.error('Apple 播放限制: $_errorMessage');
+        }
         return;
       }
 
@@ -376,17 +424,23 @@ class PlayerService extends ChangeNotifier {
       
       notifyListeners();
 
-      print('🎵 [PlayerService] 开始播放: ${track.name} - ${track.artists}');
-      print('   Track ID: ${track.id} (类型: ${track.id.runtimeType})');
+      _duration = Duration.zero;
+      _position = Duration.zero;
+      positionNotifier.value = Duration.zero;
       
       // 触发下一首封面预缓存
       _precacheNextCover();
+
+      // 🔥 启用屏幕常亮/CPU唤醒（防止后台播放卡顿）
+      if (Platform.isAndroid || Platform.isIOS) {
+        WakelockPlus.enable();
+      }
       
-      // 记录到播放历史
-      await PlayHistoryService().addToHistory(track);
+      // 记录到播放历史 (✅ 优化：非阻塞调用)
+      PlayHistoryService().addToHistory(track);
       
-      // 记录播放次数
-      await ListeningStatsService().recordPlayCount(track);
+      // 记录播放次数 (✅ 优化：非阻塞调用)
+      ListeningStatsService().recordPlayCount(track);
 
       // 1. 检查缓存
       final qualityStr = selectedQuality.toString().split('.').last;
@@ -430,8 +484,14 @@ class PlayerService extends ChangeNotifier {
           _loadLyricsForFloatingDisplay();
 
           // 播放缓存文件
-          await _audioPlayer!.play(ap.DeviceFileSource(cachedFilePath));
-          print('✅ [PlayerService] 从缓存播放: $cachedFilePath');
+          if (_shouldUseMediaKit) {
+             print('✅ [PlayerService/MediaKit] 从缓存播放: $cachedFilePath');
+             await _mediaKitPlayer!.open(mk.Media(cachedFilePath));
+             await _mediaKitPlayer!.play();
+          } else {
+             await _audioPlayer!.play(ap.DeviceFileSource(cachedFilePath));
+             print('✅ [PlayerService/AudioPlayer] 从缓存播放: $cachedFilePath');
+          }
           print('📝 [PlayerService] 歌词已从缓存恢复 (长度: ${_currentSong!.lyric.length})');
           
           // 🔍 检查：如果缓存中歌词为空，尝试后台更新
@@ -489,11 +549,26 @@ class PlayerService extends ChangeNotifier {
           _state = PlayerState.error;
           _errorMessage = '本地文件不存在';
           notifyListeners();
+
+          // 移动端弹出 Toast 提示
+          if (Platform.isAndroid || Platform.isIOS) {
+            ToastUtils.error('本地播放失败: $_errorMessage');
+          }
           return;
         }
 
         // 从本地服务取歌词
-        final lyricText = LocalLibraryService().getLyricByTrackId(filePath);
+        var lyricText = LocalLibraryService().getLyricByTrackId(filePath);
+
+        // 如果 LocalLibrary 没有该文件歌词（可能是外部 Pick 的），尝试实时解析
+        if (lyricText.isEmpty) {
+          print('🔍 [PlayerService] 本地库未找到歌词，尝试从文件实时提取...');
+          final embeddedLyric = await MetadataReader.extractLyrics(filePath);
+          if (embeddedLyric != null && embeddedLyric.isNotEmpty) {
+            lyricText = embeddedLyric;
+            print('✅ [PlayerService] 实时提取内嵌歌词成功');
+          }
+        }
 
         _currentSong = SongDetail(
           id: filePath,
@@ -515,8 +590,14 @@ class PlayerService extends ChangeNotifier {
         notifyListeners();
         _loadLyricsForFloatingDisplay();
 
-        await _audioPlayer!.play(ap.DeviceFileSource(filePath));
-        print('✅ [PlayerService] 播放本地文件: $filePath');
+        if (_shouldUseMediaKit) {
+           print('✅ [PlayerService/MediaKit] 播放本地文件: $filePath');
+           await _mediaKitPlayer!.open(mk.Media(filePath));
+           await _mediaKitPlayer!.play();
+        } else {
+           await _audioPlayer!.play(ap.DeviceFileSource(filePath));
+           print('✅ [PlayerService/AudioPlayer] 播放本地文件: $filePath');
+        }
         _extractThemeColorInBackground(track.picUrl);
         return;
       }
@@ -534,6 +615,11 @@ class PlayerService extends ChangeNotifier {
         _errorMessage = '无法获取播放链接';
         print('❌ [PlayerService] 播放失败: $_errorMessage');
         notifyListeners();
+
+        // 移动端弹出 Toast 提示
+        if (Platform.isAndroid || Platform.isIOS) {
+          ToastUtils.error('获取 URL 失败: $_errorMessage');
+        }
         return;
       }
 
@@ -605,7 +691,7 @@ class PlayerService extends ChangeNotifier {
 
       // Apple Music 播放逻辑
       // 如果 URL 是后端解密流端点（/apple/stream），流式播放并从响应头获取时长
-      // 如果 URL 是原始 HLS m3u8 流，桌面端使用 media_kit 播放
+      // 如果 URL 是原始 HLS m3u8 流，所有支持 MediaKit 的平台（包括 Android）使用 media_kit 播放
       if (track.source == MusicSource.apple) {
         final isDecryptedStream = songDetail.url.contains('/apple/stream');
         
@@ -624,7 +710,12 @@ class PlayerService extends ChangeNotifier {
             }
             
             // 流式播放
-            await _audioPlayer!.play(ap.UrlSource(songDetail.url));
+            if (_shouldUseMediaKit) {
+               await _mediaKitPlayer!.open(mk.Media(songDetail.url));
+               await _mediaKitPlayer!.play();
+            } else {
+               await _audioPlayer!.play(ap.UrlSource(songDetail.url));
+            }
             print('✅ [PlayerService] Apple Music 解密流播放成功');
             DeveloperModeService().addLog('✅ [PlayerService] Apple Music 解密流播放成功');
             return;
@@ -634,14 +725,19 @@ class PlayerService extends ChangeNotifier {
             _state = PlayerState.error;
             _errorMessage = 'Apple Music 播放失败: $e';
             notifyListeners();
+
+            // 移动端弹出 Toast 提示
+            if (Platform.isAndroid || Platform.isIOS) {
+              ToastUtils.error('播放失败: $_errorMessage');
+            }
             return;
           }
-        } else if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-          // 原始 HLS 流，桌面端使用 media_kit 播放（audioplayers/WindowsAudio 不支持 HLS）
+        } else if (_shouldUseMediaKit) {
+          // 原始 HLS 流，MediaKit 支持 HLS
           await _playAppleWithMediaKit(songDetail);
           return;
         }
-        // 移动端继续使用下面的代理逻辑
+        // 移动端（非 MediaKit）继续使用下面的代理逻辑
       }
 
       // 3. 播放音乐
@@ -669,7 +765,13 @@ class PlayerService extends ChangeNotifier {
           
           try {
             // 先尝试流式播放
-            await _audioPlayer!.play(ap.UrlSource(serverProxyUrl));
+            if (_shouldUseMediaKit) {
+               await _seekToStart(); // MediaKit 有时不重置
+               await _mediaKitPlayer!.open(mk.Media(serverProxyUrl));
+               await _mediaKitPlayer!.play();
+            } else {
+               await _audioPlayer!.play(ap.UrlSource(serverProxyUrl));
+            }
             print('✅ [PlayerService] 通过服务器代理流式播放成功');
             DeveloperModeService().addLog('✅ [PlayerService] 通过服务器代理流式播放成功');
           } catch (playError) {
@@ -677,7 +779,7 @@ class PlayerService extends ChangeNotifier {
             print('⚠️ [PlayerService] 流式播放失败，尝试下载后播放: $playError');
             DeveloperModeService().addLog('⚠️ [PlayerService] 流式播放失败: $playError');
             DeveloperModeService().addLog('🔄 [PlayerService] 回退到下载后播放');
-            final tempFilePath = await _downloadViaProxyAndPlay(serverProxyUrl, songDetail.name);
+            final tempFilePath = await _downloadViaProxyAndPlay(serverProxyUrl, songDetail.name, songDetail.level);
             if (tempFilePath != null) {
               _currentTempFilePath = tempFilePath;
             }
@@ -693,7 +795,13 @@ class PlayerService extends ChangeNotifier {
             DeveloperModeService().addLog('🔗 [PlayerService] 本地代理URL: ${proxyUrl.length > 80 ? '${proxyUrl.substring(0, 80)}...' : proxyUrl}');
             
             try {
-              await _audioPlayer!.play(ap.UrlSource(proxyUrl));
+              if (_shouldUseMediaKit) {
+                 await _seekToStart();
+                 await _mediaKitPlayer!.open(mk.Media(proxyUrl));
+                 await _mediaKitPlayer!.play();
+              } else {
+                 await _audioPlayer!.play(ap.UrlSource(proxyUrl));
+              }
               print('✅ [PlayerService] 通过本地代理开始流式播放');
               DeveloperModeService().addLog('✅ [PlayerService] 通过本地代理开始流式播放');
             } catch (playError) {
@@ -709,6 +817,11 @@ class PlayerService extends ChangeNotifier {
                   _state = PlayerState.error;
                   _errorMessage = 'Apple Music 播放失败（本地代理/直连均失败）';
                   notifyListeners();
+                  
+                  // 移动端弹出 Toast 提示
+                  if (Platform.isAndroid || Platform.isIOS) {
+                    ToastUtils.error('播放链接异常: $_errorMessage');
+                  }
                   return;
                 }
               } else {
@@ -733,6 +846,11 @@ class PlayerService extends ChangeNotifier {
                 _state = PlayerState.error;
                 _errorMessage = 'Apple Music 播放失败（本地代理不可用且直连失败）';
                 notifyListeners();
+
+                // 移动端弹出 Toast 提示
+                if (Platform.isAndroid || Platform.isIOS) {
+                  ToastUtils.error('播放链接获取失败: $_errorMessage');
+                }
                 return;
               }
             } else {
@@ -745,7 +863,13 @@ class PlayerService extends ChangeNotifier {
         }
       } else {
         // 网易云音乐直接播放
-        await _audioPlayer!.play(ap.UrlSource(songDetail.url));
+        if (_shouldUseMediaKit) {
+           await _seekToStart();
+           await _mediaKitPlayer!.open(mk.Media(songDetail.url));
+           await _mediaKitPlayer!.play();
+        } else {
+           await _audioPlayer!.play(ap.UrlSource(songDetail.url));
+        }
         print('✅ [PlayerService] 开始播放: ${songDetail.url}');
         DeveloperModeService().addLog('✅ [PlayerService] 开始播放网易云音乐');
       }
@@ -771,9 +895,11 @@ class PlayerService extends ChangeNotifier {
       if (onAudioSourceNotConfigured != null) {
         print('🔔 [PlayerService] 正在调用音源未配置回调...');
         onAudioSourceNotConfigured!();
-        print('🔔 [PlayerService] 回调调用完成');
-      } else {
-        print('⚠️ [PlayerService] 回调未设置，无法显示弹窗');
+      }
+
+      // 移动端弹出 Toast 提示
+      if (Platform.isAndroid || Platform.isIOS) {
+        ToastUtils.error('音源未配置: $_errorMessage');
       }
     } catch (e) {
       _state = PlayerState.error;
@@ -781,6 +907,11 @@ class PlayerService extends ChangeNotifier {
       _isAudioSourceNotConfigured = false;
       print('❌ [PlayerService] 播放异常: $e');
       notifyListeners();
+
+      // 移动端弹出 Toast 提示
+      if (Platform.isAndroid || Platform.isIOS) {
+        ToastUtils.error('播放异常: $_errorMessage');
+      }
     }
   }
 
@@ -792,15 +923,16 @@ class PlayerService extends ChangeNotifier {
   }
 
   /// 通过服务器代理下载音频并播放（用于移动端 QQ 音乐和酷狗音乐）
-  Future<String?> _downloadViaProxyAndPlay(String proxyUrl, String songName) async {
+  Future<String?> _downloadViaProxyAndPlay(String proxyUrl, String songName, [String? level]) async {
     try {
-      print('📥 [PlayerService] 通过服务器代理下载: $songName');
+      print('📥 [PlayerService] 通过服务器代理下载: $songName (音质: $level)');
       DeveloperModeService().addLog('📥 [PlayerService] 通过服务器代理下载: $songName');
       
       // 获取临时目录
       final tempDir = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final tempFilePath = '${tempDir.path}/temp_audio_$timestamp.mp3';
+      final extension = AudioQualityService.getExtensionFromLevel(level);
+      final tempFilePath = '${tempDir.path}/temp_audio_$timestamp.$extension';
       
       // 通过服务器代理下载（服务器已经处理了 referer 等请求头）
       final response = await http.get(Uri.parse(proxyUrl));
@@ -813,7 +945,12 @@ class PlayerService extends ChangeNotifier {
         DeveloperModeService().addLog('✅ [PlayerService] 代理下载完成: ${(response.bodyBytes.length / 1024 / 1024).toStringAsFixed(2)} MB');
         
         // 播放临时文件
-        await _audioPlayer!.play(ap.DeviceFileSource(tempFilePath));
+        if (_shouldUseMediaKit) {
+             await _mediaKitPlayer!.open(mk.Media(tempFilePath));
+             await _mediaKitPlayer!.play();
+        } else {
+             await _audioPlayer!.play(ap.DeviceFileSource(tempFilePath));
+        }
         print('▶️ [PlayerService] 开始播放临时文件');
         DeveloperModeService().addLog('▶️ [PlayerService] 开始播放临时文件');
         
@@ -940,19 +1077,25 @@ class PlayerService extends ChangeNotifier {
       title: 'Apple Music 播放限制',
       body: '由于Apple接口限制，"${track.name}" 需要换源才能播放！',
     );
+    
+    // 移动端弹出 Toast 提示
+    if (Platform.isAndroid || Platform.isIOS) {
+      ToastUtils.error('由于Apple接口限制，该音乐需换源播放');
+    }
     print('🍎 [PlayerService] 已发送 Apple Music 换源提示通知');
   }
 
   /// 下载音频文件并播放（用于QQ音乐和酷狗音乐）
   Future<String?> _downloadAndPlay(SongDetail songDetail) async {
     try {
-      print('📥 [PlayerService] 开始下载音频: ${songDetail.name}');
+      print('📥 [PlayerService] 开始下载音频: ${songDetail.name} (音质: ${songDetail.level})');
       DeveloperModeService().addLog('📥 [PlayerService] 开始下载音频: ${songDetail.name}');
       
       // 获取临时目录
       final tempDir = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final tempFilePath = '${tempDir.path}/temp_audio_$timestamp.mp3';
+      final extension = AudioQualityService.getExtensionFromLevel(songDetail.level);
+      final tempFilePath = '${tempDir.path}/temp_audio_$timestamp.$extension';
       
       // 设置请求头（QQ音乐需要 referer）
       final headers = <String, String>{
@@ -984,7 +1127,12 @@ class PlayerService extends ChangeNotifier {
         DeveloperModeService().addLog('✅ [PlayerService] 下载完成: ${(response.bodyBytes.length / 1024 / 1024).toStringAsFixed(2)} MB');
         
         // 播放临时文件
-        await _audioPlayer!.play(ap.DeviceFileSource(tempFilePath));
+        if (_shouldUseMediaKit) {
+             await _mediaKitPlayer!.open(mk.Media(tempFilePath));
+             await _mediaKitPlayer!.play();
+        } else {
+             await _audioPlayer!.play(ap.DeviceFileSource(tempFilePath));
+        }
         print('▶️ [PlayerService] 开始播放临时文件');
         DeveloperModeService().addLog('▶️ [PlayerService] 开始播放临时文件');
         
@@ -1148,48 +1296,58 @@ class PlayerService extends ChangeNotifier {
     }
 
     try {
-      // 检查缓存（为移动端渐变模式添加特殊缓存键）
+      // 检查缓存
       final backgroundService = PlayerBackgroundService();
       final isMobileGradientMode = Platform.isAndroid && 
                                    backgroundService.enableGradient &&
                                    backgroundService.backgroundType == PlayerBackgroundType.adaptive;
-      final cacheKey = isMobileGradientMode ? '${imageUrl}_bottom' : imageUrl;
       
-      if (_themeColorCache.containsKey(cacheKey)) {
-        final cachedColor = _themeColorCache[cacheKey];
-        themeColorNotifier.value = cachedColor;
-        print('🎨 [PlayerService] 使用缓存的主题色: $cachedColor');
+      // ✅ 优化：立即从 ColorExtractionService 获取缓存结果（如果有）
+      ColorExtractionResult? cachedResult;
+      if (isMobileGradientMode) {
+        // 模拟底部 30% 区域（这只是为了匹配之前 extractColorsFromRegion 的缓存键生成方式，
+        // 实际逻辑中我们现在改为在 extractColorFromBottomRegion 里统一处理）
+        // 暂时直接检查 imageUrl 缓存，稍后由异步方法处理
+      } else {
+        cachedResult = ColorExtractionService().getCachedColors(imageUrl);
+      }
+      
+      if (cachedResult != null && cachedResult.themeColor != null) {
+        themeColorNotifier.value = cachedResult.themeColor!;
+        print('🎨 [PlayerService] 使用缓存的主题色: ${cachedResult.themeColor}');
         return;
       }
 
       // ✅ 优化：立即设置默认色，避免UI阻塞
       themeColorNotifier.value = Colors.grey[700]!;
-      print('🎨 [PlayerService] 开始提取主题色${isMobileGradientMode ? '（从封面底部）' : ''}...');
+
+      // ✅ 关键优化：如果应用已经在后台运行，且用户并没有显式查看播放器（已有颜色或不是切换第一首歌），
+      // 则可以推迟甚至跳过异步颜色提取，以减少后台 CPU 竞争，防止卡顿。
+      final isAppInBackground = WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused ||
+                             WidgetsBinding.instance.lifecycleState == AppLifecycleState.inactive;
+      
+      if (isAppInBackground) {
+        print('🎨 [PlayerService] 应用在后台，跳过异步主题色提取以节省资源');
+        return;
+      }
+
+      print('🎨 [PlayerService] 开始异步提取主题色${isMobileGradientMode ? '（从封面底部）' : ''}...');
       
       Color? themeColor;
-      
-      // 移动端渐变模式：从封面底部区域提取颜色（仍使用 PaletteGenerator）
       if (isMobileGradientMode) {
         themeColor = await _extractColorFromBottomRegion(imageUrl);
       } else {
-        // 其他模式：使用 isolate 提取颜色，不阻塞主线程
-        themeColor = await _extractColorFromFullImageAsync(imageUrl);
+        final result = await ColorExtractionService().extractColorsFromUrl(imageUrl);
+        themeColor = result?.themeColor;
       }
 
-      // 如果提取成功，更新主题色（会平滑过渡）
+      // 如果提取成功，更新主题色
       if (themeColor != null) {
-        _themeColorCache[cacheKey] = themeColor;
         themeColorNotifier.value = themeColor;
         print('✅ [PlayerService] 主题色提取完成: $themeColor');
-      } else {
-        print('⚠️ [PlayerService] 无法从封面提取颜色（可能是网络问题），保持默认灰色');
       }
-    } on TimeoutException catch (e) {
-      print('⏱️ [PlayerService] 主题色提取超时: 网络较慢，保持默认灰色');
-      // 已经设置了默认色，不需要再次设置
     } catch (e) {
       print('⚠️ [PlayerService] 主题色提取失败: $e');
-      // 已经设置了默认色，不需要再次设置
     }
   }
 
@@ -1249,80 +1407,65 @@ class PlayerService extends ChangeNotifier {
     }
   }
 
-  /// 从图片底部区域提取主题色（用于移动端渐变模式）
-  /// 支持网络 URL 和本地文件路径
+  /// 从图片底部区域提取主题色（使用 Isolate 异步提取，不阻塞主线程）
   Future<Color?> _extractColorFromBottomRegion(String imageUrl) async {
     try {
-      // 判断是网络 URL 还是本地文件路径
-      final isNetwork = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
-      final ImageProvider imageProvider;
+      // ✅ 关键优化：预定义底部区域（底部 30%）
+      // 由于我们不知道图片的原始尺寸，且不想在主线程解码，
+      // 我们在 ColorExtractionService 中处理这个问题。
+      // 为简化，我们传递一个较大的虚拟尺寸，Isolate 内部会自动处理。
+      // 但其实更简单的方法是让 ColorExtractionService 内部自己计算底部。
       
-      if (isNetwork) {
-        imageProvider = CachedNetworkImageProvider(imageUrl);
-      } else {
-        final file = File(imageUrl);
-        if (!await file.exists()) {
-          print('⚠️ [PlayerService] 本地封面文件不存在: $imageUrl');
-          return null;
-        }
-        imageProvider = FileImage(file);
-      }
+      // 这里的 Rect 是相对于原始图片的坐标。因为我们现在不知道图片大小，
+      // 我们修改了 ColorExtractionService 支持直接指定“底部比例”。
+      // 既然目前的 Service 还不支持比例，我们先手动读取一次尺寸（很快）或者
+      // 直接在 Isolate 中解码后进行裁剪。
       
-      // ✅ 优化：使用缩略图加载，减少处理时间
-      final imageStream = imageProvider.resolve(
-        const ImageConfiguration(size: Size(150, 150))
-      );
-      final completer = async_lib.Completer<ui.Image>();
+      // 注意：目前的 ColorExtractionService 已经支持了 Rect 裁剪。
+      // 为了性能，我们这里的解决方案是发送一个特殊的 Rect，
+      // 如果 rect.left 是 -1，表示按比例提取底部。
+      // 或者：直接在这里先用轻量级的手段获取图片尺寸。
+      
+      // 最简单稳定的方案：更新 ColorExtractionService 以便在不知道尺寸时也能处理比例。
+      // 既然已经实施了 Rect 裁剪，我们先在 PlayerService 逻辑中保持简洁。
+      
+      // 🔧 改进：直接让 ColorExtractionService 处理底部 30% 的逻辑
+      // 这里我们先传递一个“标志位”区域，或者就在 Isolate 里面写死 30%。
+      // 咱们还是把逻辑做在 ColorExtractionService 比较干净。
+      
+      // 临时方案（为了不再次修改 Service）：
+      // 先用一个大概的 Rect，或者修改 Service 增加 extractColorsFromBottomFraction。
+      
+      // 💡 更好方案：使用我们刚才新建好的 extractColorsFromRegion。
+      // 我们在内部先快速 Resolve 图片获取尺寸（这在主线程完成，但通常很快）
+      final ImageProvider imageProvider = imageUrl.startsWith('http') 
+          ? CachedNetworkImageProvider(imageUrl) 
+          : FileImage(File(imageUrl));
+      
+      final async_lib.Completer<ui.Image> completer = async_lib.Completer();
+      final ImageStream stream = imageProvider.resolve(const ImageConfiguration());
       late ImageStreamListener listener;
-      
-      listener = ImageStreamListener((ImageInfo info, bool _) {
-        completer.complete(info.image);
-        imageStream.removeListener(listener);
-      }, onError: (exception, stackTrace) {
-        completer.completeError(exception, stackTrace);
-        imageStream.removeListener(listener);
+      listener = ImageStreamListener((info, _) {
+         completer.complete(info.image);
+         stream.removeListener(listener);
+      }, onError: (e, s) {
+         completer.completeError(e, s);
+         stream.removeListener(listener);
       });
+      stream.addListener(listener);
       
-      imageStream.addListener(listener);
-      // ✅ 优化：缩短图片加载超时时间
-      final image = await completer.future.timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {
-          imageStream.removeListener(listener);
-          throw TimeoutException('图片加载超时', const Duration(seconds: 3));
-        },
-      );
+      final image = await completer.future.timeout(const Duration(seconds: 3));
+      final region = Rect.fromLTWH(0, image.height * 0.7, image.width.toDouble(), image.height * 0.3);
       
-      // 计算底部区域（底部 30%）
-      final width = image.width;
-      final height = image.height;
-      final bottomHeight = (height * 0.3).toInt();
-      final topOffset = height - bottomHeight;
-      
-      // 创建一个自定义的 ImageProvider 用于底部区域
-      final region = Rect.fromLTWH(0, topOffset.toDouble(), width.toDouble(), bottomHeight.toDouble());
-      
-      // 对底部区域进行颜色提取
-      final paletteGenerator = await PaletteGenerator.fromImageProvider(
-        imageProvider,
+      final result = await ColorExtractionService().extractColorsFromRegion(
+        imageUrl,
         region: region,
-        size: const Size(150, 150),          // ✅ 优化：使用缩略图尺寸
-        maximumColorCount: 10,                // ✅ 优化：减少采样数（从20降到10）
-        timeout: const Duration(seconds: 3), // ✅ 优化：缩短超时时间
+        sampleSize: 64,
       );
-
-      print('🎨 [PlayerService] 从底部区域提取颜色（区域: ${region.toString()}）');
       
-      return paletteGenerator.vibrantColor?.color ?? 
-             paletteGenerator.dominantColor?.color ??
-             paletteGenerator.mutedColor?.color;
-    } on TimeoutException catch (e) {
-      print('⏱️ [PlayerService] 图片加载超时，回退到默认颜色');
-      // 超时不再回退到全图提取，直接返回 null
-      return null;
+      return result?.themeColor;
     } catch (e) {
-      print('⚠️ [PlayerService] 从底部区域提取颜色失败: $e');
-      // 其他错误也直接返回 null，避免二次尝试
+      print('⚠️ [PlayerService] 异步从底部区域提取颜色失败: $e');
       return null;
     }
   }
@@ -1385,6 +1528,16 @@ class PlayerService extends ChangeNotifier {
     } catch (e) {
       print('❌ [PlayerService] 停止失败: $e');
     }
+  }
+  
+  /// 媒体尝试 Seek 到开始位置 (MediaKit 专用 helper)
+  Future<void> _seekToStart() async {
+     if (_mediaKitPlayer != null) {
+       // 防止某些情况下 MediaKit 记住上次播放位置导致不从头开始
+       try {
+         await _mediaKitPlayer!.seek(Duration.zero);
+       } catch (_) {}
+     }
   }
 
   /// 跳转到指定位置
@@ -1471,6 +1624,26 @@ class PlayerService extends ChangeNotifier {
       ),
     );
 
+    // 🔧 性能优化：针对 Android 后台播放优化缓冲策略
+    if (Platform.isAndroid) {
+      try {
+        // 设置音频缓冲区大小（秒），默认通常很小
+        await (_mediaKitPlayer!.platform as dynamic)?.setProperty('audio-buffer', '10.0');
+        // 开启缓存并设置缓冲区大小 (10MB)
+        await (_mediaKitPlayer!.platform as dynamic)?.setProperty('cache', 'yes');
+        await (_mediaKitPlayer!.platform as dynamic)?.setProperty('demuxer-max-bytes', '10485760');
+        await (_mediaKitPlayer!.platform as dynamic)?.setProperty('demuxer-max-back-bytes', '5242880');
+        // 设置预读时长
+        await (_mediaKitPlayer!.platform as dynamic)?.setProperty('demuxer-readahead-secs', '30');
+        print('🚀 [PlayerService] MediaKit Android 后台优化参数已应用');
+      } catch (e) {
+        print('⚠️ [PlayerService] MediaKit 优化参数应用失败: $e');
+      }
+    }
+    
+    // 初始化完成后应用均衡器
+    await _applyEqualizer();
+
     _mediaKitPlayingSub = _mediaKitPlayer!.stream.playing.listen((playing) {
       if (playing) {
         _state = PlayerState.playing;
@@ -1478,6 +1651,9 @@ class PlayerService extends ChangeNotifier {
         _startStateSaveTimer();
         if (Platform.isWindows) {
           DesktopLyricService().setPlayingState(true);
+        }
+        if (Platform.isAndroid) {
+          AndroidFloatingLyricService().setPlayingState(true);
         }
       } else {
         if (_state == PlayerState.playing) {
@@ -1487,6 +1663,9 @@ class PlayerService extends ChangeNotifier {
           _stopStateSaveTimer();
           if (Platform.isWindows) {
             DesktopLyricService().setPlayingState(false);
+          }
+          if (Platform.isAndroid) {
+            AndroidFloatingLyricService().setPlayingState(false);
           }
         }
       }
@@ -1514,6 +1693,9 @@ class PlayerService extends ChangeNotifier {
         _stopStateSaveTimer();
         if (Platform.isWindows) {
           DesktopLyricService().setPlayingState(false);
+        }
+        if (Platform.isAndroid) {
+          AndroidFloatingLyricService().setPlayingState(false);
         }
         notifyListeners();
         _playNextFromHistory();
@@ -1676,6 +1858,11 @@ class PlayerService extends ChangeNotifier {
       _audioPlayer!.stop();
       _audioPlayer!.dispose();
     }
+    // 释放 MediaKit 播放器
+    if (_mediaKitPlayer != null) {
+      _mediaKitPlayer!.dispose();
+      _mediaKitPlayer = null;
+    }
     // 停止代理服务器
     ProxyService().stop();
     // 清理主题色通知器
@@ -1721,6 +1908,12 @@ class PlayerService extends ChangeNotifier {
         _audioPlayer!.dispose().catchError((e) {
           print('⚠️ [PlayerService] 释放资源失败: $e');
         });
+      }
+      
+      // 释放 MediaKit 播放器
+      if (_mediaKitPlayer != null) {
+        _mediaKitPlayer!.dispose();
+        _mediaKitPlayer = null;
       }
 
       print('✅ [PlayerService] 播放器资源清理指令已发出');
@@ -2025,17 +2218,19 @@ class PlayerService extends ChangeNotifier {
       _currentLyricIndex = -1;
       print('🎵 [PlayerService] 悬浮歌词已加载: ${_lyrics.length} 行');
       
-      // 🔥 关键修复：将完整歌词数据发送到Android原生层
-      // 这样即使应用退到后台，原生层也能独立更新歌词
+      // 🔥 关键优化：异步分发歌词数据到 Android 原生层
+      // 避免在播放启动的关键帧进行大规模对象序列化，造成卡顿
       if (Platform.isAndroid && AndroidFloatingLyricService().isVisible) {
-        final lyricsData = _lyrics.map((line) => {
-          'time': line.startTime.inMilliseconds,  // 转换为毫秒
-          'text': line.text,
-          'translation': line.translation ?? '',
-        }).toList();
-        
-        AndroidFloatingLyricService().setLyricsData(lyricsData);
-        print('✅ [PlayerService] 歌词数据已发送到Android原生层，支持后台更新');
+        Future.microtask(() {
+          final lyricsData = _lyrics.map((line) => {
+            'time': line.startTime.inMilliseconds,
+            'text': line.text,
+            'translation': line.translation ?? '',
+          }).toList();
+          
+          AndroidFloatingLyricService().setLyricsData(lyricsData);
+          print('✅ [PlayerService] 歌词数据已异步发送到 Android 原生层');
+        });
       }
       
       // 立即更新当前歌词
@@ -2106,7 +2301,13 @@ class PlayerService extends ChangeNotifier {
   /// 悬浮歌词也能持续更新
   Future<void> updateFloatingLyricManually() async {
     // 只有在播放器已初始化时才更新
-    if (_audioPlayer == null) return;
+    if (_audioPlayer == null && _mediaKitPlayer == null) return;
+    
+    // 如果使用 MediaKit，直接同步当前状态位置，不需要 polling 
+    if (_useMediaKit && _mediaKitPlayer != null) {
+        _syncPositionToNative(_position);
+        return;
+    }
 
     // 🔥 关键修复：主动获取播放器的当前位置，而不是依赖 onPositionChanged 事件
     // 因为在后台时，onPositionChanged 事件可能被系统节流或延迟
@@ -2147,5 +2348,93 @@ class PlayerService extends ChangeNotifier {
     } catch (e) {
       print('❌ [PlayerService] 恢复播放失败: $e');
     }
+  }
+
+  /// 更新均衡器增益
+  /// [gains] 10个频段的增益值 (-12.0 到 12.0 dB)
+  Future<void> updateEqualizer(List<double> gains) async {
+    if (gains.length != 10) return;
+    
+    _equalizerGains = List.from(gains);
+    notifyListeners();
+    
+    // 应用效果
+    await _applyEqualizer();
+    
+    // 保存设置 (节流)
+    _saveEqualizerSettingsThrottled();
+  }
+  
+  /// 开关均衡器
+  Future<void> setEqualizerEnabled(bool enabled) async {
+    if (_equalizerEnabled == enabled) return;
+    
+    _equalizerEnabled = enabled;
+    notifyListeners();
+    
+    await _applyEqualizer();
+    
+    // 保存设置
+    PersistentStorageService().setBool('player_eq_enabled', enabled);
+  }
+
+  /// 应用均衡器效果 (底层实现)
+  Future<void> _applyEqualizer() async {
+    if (!_useMediaKit || _mediaKitPlayer == null) return;
+    
+    try {
+      if (!_equalizerEnabled) {
+        // 清除滤镜
+        // 注意：media_kit (libmpv) 清除滤镜是设置空字符串
+        // 使用 dynamic 调用 platform 接口
+        await (_mediaKitPlayer!.platform as dynamic)?.setProperty('af', '');
+        print('🎚️ [PlayerService] 均衡器已禁用');
+        return;
+      }
+
+      // 构建 ffmpeg equalizer 滤镜字符串
+      // 格式：equalizer=f=31:width_type=o:width=1:g=1.5,equalizer=f=63...
+      // width=1 表示 1 倍频程 (Octave)
+      final filterBuffer = StringBuffer();
+      
+      for (int i = 0; i < 10; i++) {
+        final freq = kEqualizerFrequencies[i];
+        final gain = _equalizerGains[i];
+        
+        // 🔧 性能优化：跳过增益接近 0 的频段，减少 CPU 开销
+        // 只有当增益绝对值大于 0.1dB 时才应用滤镜
+        if (gain.abs() <= 0.1) continue;
+
+        if (filterBuffer.isNotEmpty) filterBuffer.write(',');
+        filterBuffer.write('equalizer=f=$freq:width_type=o:width=1:g=${gain.toStringAsFixed(1)}');
+      }
+      
+      final filterString = filterBuffer.toString();
+      // print('🎚️ [PlayerService] 应用均衡器: $filterString');
+      
+      if (filterString.isEmpty) {
+        // 如果所有频段都是 0，相当于禁用均衡器（清除滤镜）
+        await (_mediaKitPlayer!.platform as dynamic)?.setProperty('af', '');
+        // print('🎚️ [PlayerService] 均衡器（平直）已应用，滤镜已清除');
+      } else {
+        // 设置 libmpv 属性 'af' (audio filter)
+        await (_mediaKitPlayer!.platform as dynamic)?.setProperty('af', filterString);
+      }
+      
+    } catch (e) {
+      print('⚠️ [PlayerService] 应用均衡器失败: $e');
+    }
+  }
+
+  async_lib.Timer? _saveEqTimer;
+  /// 保存均衡器设置 (节流)
+  void _saveEqualizerSettingsThrottled() {
+    _saveEqTimer?.cancel();
+    _saveEqTimer = async_lib.Timer(const Duration(milliseconds: 1000), () {
+      PersistentStorageService().setStringList(
+        'player_eq_gains', 
+        _equalizerGains.map((e) => e.toString()).toList()
+      );
+    });
   }
 }

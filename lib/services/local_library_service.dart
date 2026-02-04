@@ -9,6 +9,7 @@ import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import '../models/track.dart';
+import '../utils/metadata_reader.dart';
 
 /// 本地音乐库服务：负责扫描目录、管理本地歌曲与歌词
 /// 支持读取音频文件元数据（标题、艺术家、专辑封面等）
@@ -344,6 +345,15 @@ class LocalLibraryService extends ChangeNotifier {
         final altLyricFile = File(altLyricPath);
         if (await altLyricFile.exists()) {
           lyricText = await altLyricFile.readAsString();
+        }
+      }
+
+      // 如果外部歌词为空，尝试读取文件内嵌歌词
+      if (lyricText.isEmpty) {
+        final embeddedLyric = await MetadataReader.extractLyrics(filePath);
+        if (embeddedLyric != null && embeddedLyric.isNotEmpty) {
+          lyricText = embeddedLyric;
+          debugPrint('📀 [LocalLibrary] 成功提取内嵌歌词: ${p.basename(filePath)}');
         }
       }
 

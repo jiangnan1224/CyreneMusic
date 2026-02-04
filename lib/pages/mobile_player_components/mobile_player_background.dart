@@ -10,6 +10,7 @@ import '../../models/track.dart';
 import '../../models/song_detail.dart';
 import '../../widgets/video_background_player.dart';
 import '../../widgets/mesh_gradient_background.dart';
+import '../../widgets/flowing_light_background.dart';
 
 /// 动态背景颜色缓存管理器（移动端）
 /// 现在使用 ColorExtractionService 的缓存
@@ -84,10 +85,10 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
     
     final backgroundType = PlayerBackgroundService().backgroundType;
     
-    // 动态背景需要提取颜色
-    if (backgroundType == PlayerBackgroundType.dynamic) {
-      _scheduleColorExtraction();
-    }
+    // 动态背景 (流体云) 不需要提取颜色，由 FlowingLightBackground 直接处理图片
+    // if (backgroundType == PlayerBackgroundType.dynamic) {
+    //   _scheduleColorExtraction();
+    // }
     
     // 自适应背景需要提取主题色
     if (backgroundType == PlayerBackgroundType.adaptive) {
@@ -102,7 +103,7 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
     
     final backgroundType = PlayerBackgroundService().backgroundType;
     if (backgroundType == PlayerBackgroundType.dynamic) {
-      _scheduleColorExtraction();
+      // _scheduleColorExtraction();
     } else if (backgroundType == PlayerBackgroundType.adaptive) {
       _scheduleThemeColorExtraction();
     }
@@ -300,57 +301,39 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
     }
   }
 
-  /// 构建动态 Mesh Gradient 背景（Apple Music 风格）
+  /// 构建动态 Mesh Gradient 背景（新版流体云效果）
   /// [addBlur] 是否添加模糊层（流体云样式下使用）
-  /// 注意：MeshGradient 自身已带有高斯模糊效果，移除额外的 BackdropFilter 以优化性能
   Widget _buildDynamicMeshBackground(SongDetail? song, Track? track, {bool addBlur = false}) {
-    final greyColor = Colors.grey[900] ?? const Color(0xFF212121);
-    
     // 使用 ListenableBuilder 监听 PlayerService，确保歌曲切换时颜色也会更新
     return ListenableBuilder(
       listenable: PlayerService(),
       builder: (context, _) {
-        // 检查是否需要更新颜色
-        final currentSong = PlayerService().currentSong;
-        final currentTrack = PlayerService().currentTrack;
-        final imageUrl = currentSong?.pic ?? currentTrack?.picUrl ?? '';
+         // 获取当前封面图片的 Provider
+        final player = PlayerService();
+        // 优先使用缓存的 Provider
+        ImageProvider? imageProvider = player.currentCoverImageProvider;
         
-        // 如果图片URL变化，触发颜色提取
-        if (imageUrl.isNotEmpty && imageUrl != _currentImageUrl) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _scheduleColorExtraction();
-          });
+        // 如果没有 Provider，尝试从 URL 构建
+        if (imageProvider == null) {
+            final currentSong = player.currentSong;
+            final currentTrack = player.currentTrack;
+            final imageUrl = currentSong?.pic ?? currentTrack?.picUrl ?? song?.pic ?? track?.picUrl;
+            
+            if (imageUrl != null && imageUrl.isNotEmpty) {
+               if (imageUrl.startsWith('http')) {
+                 imageProvider = CachedNetworkImageProvider(imageUrl);
+               } else {
+                 imageProvider = FileImage(File(imageUrl));
+               }
+            }
         }
-        
-        final meshBackground = MeshGradientBackground(
-          colors: _dynamicColors,
-          speed: 0.3,
-          backgroundColor: _dynamicColors.isNotEmpty ? _dynamicColors[0] : greyColor,
-          animate: true,
+
+        final bg = FlowingLightBackground(
+          imageProvider: imageProvider,
+          child: addBlur ? Container(color: Colors.black.withOpacity(0.15)) : null,
         );
         
-        // 性能优化：MeshGradient 自身已带有高斯模糊效果
-        // 移除额外的 BackdropFilter 以减少 GPU 开销
-        // 流体云样式下只添加轻微的半透明遮罩增强可读性
-        if (!addBlur) {
-          return RepaintBoundary(child: meshBackground);
-        }
-        
-        // 流体云样式下添加轻微遮罩（无模糊），增强文字可读性
-        return RepaintBoundary(
-          child: Stack(
-            children: [
-              // Mesh Gradient 背景（自带模糊效果）
-              Positioned.fill(child: meshBackground),
-              // 轻微半透明遮罩（无模糊）
-              Positioned.fill(
-                child: Container(
-                  color: Colors.black.withOpacity(0.15),
-                ),
-              ),
-            ],
-          ),
-        );
+        return RepaintBoundary(child: bg);
       },
     );
   }
@@ -431,9 +414,10 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
                     ),
                   
                   // 整体模糊层 (始终保持固定模糊度)
+                  // ✅ 性能优化：限制模糊半径最大值为 30，避免 GPU 过载
                   Positioned.fill(
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 30.0, sigmaY: 30.0),
+                      filter: ImageFilter.blur(sigmaX: 25.0, sigmaY: 25.0),
                       child: Container(
                         color: Colors.black.withOpacity(0.1),
                       ),
@@ -627,13 +611,13 @@ class _MobilePlayerBackgroundState extends State<MobilePlayerBackground> {
                   filterQuality: FilterQuality.medium,
                 ),
               ),
-              // 模糊层（性能优化：限制模糊程度避免GPU过载）
-              if (backgroundService.blurAmount > 0 && backgroundService.blurAmount <= 40)
+              // 模糊层（性能优化：限制模糊程度避免GPU过载，最大 25）
+              if (backgroundService.blurAmount > 0)
                 Positioned.fill(
                   child: BackdropFilter(
                     filter: ImageFilter.blur(
-                      sigmaX: backgroundService.blurAmount,
-                      sigmaY: backgroundService.blurAmount,
+                      sigmaX: backgroundService.blurAmount.clamp(0.0, 25.0),
+                      sigmaY: backgroundService.blurAmount.clamp(0.0, 25.0),
                     ),
                     child: Container(
                       color: Colors.black.withOpacity(0.3), // 添加半透明遮罩

@@ -8,6 +8,9 @@ enum LyricStyle {
   
   /// 流体云样式
   fluidCloud,
+
+  /// 沉浸样式
+  immersive,
 }
 
 /// 歌词对齐方式
@@ -201,6 +204,8 @@ class LyricStyleService extends ChangeNotifier {
         return '默认样式';
       case LyricStyle.fluidCloud:
         return '流体云';
+      case LyricStyle.immersive:
+        return '沉浸样式';
     }
   }
 
@@ -211,6 +216,8 @@ class LyricStyleService extends ChangeNotifier {
         return '经典卡拉OK效果，从左到右填充';
       case LyricStyle.fluidCloud:
         return '云朵般流动的歌词效果，柔和舒适';
+      case LyricStyle.immersive:
+        return '简洁的沉浸式体验，突出单行歌词';
     }
   }
 }

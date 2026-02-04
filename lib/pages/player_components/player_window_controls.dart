@@ -115,6 +115,9 @@ class PlayerWindowControls extends StatelessWidget {
                   // 迷你播放器按钮
                   _MiniPlayerButton(),
                   
+                  // 布局快捷切换按钮
+                  _LayoutToggleButton(),
+                  
                   const SizedBox(width: 8),
 
                   // 歌曲百科按钮 (Apple Music 风格)
@@ -157,17 +160,70 @@ class PlayerWindowControls extends StatelessWidget {
         ),
       );
     } else {
-      // 其他平台使用普通容器
+      // 其他平台（如移动端）
       return Container(
         height: 56,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           children: [
+            // 返回按钮
             IconButton(
               icon: const Icon(Icons.keyboard_arrow_down, size: 32),
               color: Colors.white,
               onPressed: onBackPressed,
+              tooltip: '返回',
             ),
+            const SizedBox(width: 4),
+            // 更多按钮
+            _MoreMenuButton(
+              onPlaylistPressed: onPlaylistPressed,
+              onSleepTimerPressed: onSleepTimerPressed,
+              onPlaybackModePressed: onPlaybackModePressed,
+            ),
+            // 译文按钮
+            if (showTranslationButton)
+              _TranslationButton(
+                showTranslation: showTranslation,
+                onToggle: onTranslationToggle,
+              ),
+            // 下载按钮
+            if (currentTrack != null && currentSong != null)
+              _DownloadButton(
+                track: currentTrack!,
+                song: currentSong!,
+              ),
+            
+            const Spacer(),
+            
+            // 布局快捷切换按钮
+            _LayoutToggleButton(),
+            
+            // 歌曲百科按钮
+            if (onWikiToggle != null)
+              _TopBarButton(
+                icon: CupertinoIcons.info_circle,
+                isActive: isWikiActive,
+                onPressed: onWikiToggle!,
+                tooltip: '歌曲信息',
+              ),
+            
+            // 待播清单按钮
+            if (onQueueToggle != null)
+              _TopBarButton(
+                icon: Icons.format_list_bulleted_rounded,
+                isActive: isQueueActive,
+                onPressed: onQueueToggle!,
+                tooltip: '待播清单',
+              ),
+            
+            // 歌词按钮
+            if (onLyricsToggle != null)
+              _TopBarButton(
+                icon: Icons.lyrics_rounded,
+                isActive: isLyricsActive,
+                onPressed: onLyricsToggle!,
+                tooltip: '歌词',
+              ),
           ],
         ),
       );
@@ -353,24 +409,35 @@ class _MoreMenuButtonState extends State<_MoreMenuButton> {
               // ======= 外观设置分组 =======
               _buildSectionTitle('外观'),
               
-              // 播放器主题
+              // 播放器主题 (循环切换)
               _buildMenuItem(
-                icon: lyricStyle.currentStyle == LyricStyle.fluidCloud 
-                    ? Icons.water_drop_rounded 
-                    : Icons.music_note_rounded,
-                label: lyricStyle.currentStyle == LyricStyle.fluidCloud 
-                    ? '流体云主题' 
-                    : '经典主题',
+                icon: lyricStyle.currentStyle == LyricStyle.immersive 
+                    ? Icons.fullscreen_rounded 
+                    : Icons.water_drop_rounded,
+                label: lyricStyle.currentStyle == LyricStyle.immersive
+                    ? '沉浸主题'
+                    : '流体云主题',
                 subtitle: '切换播放器风格',
-                iconColor: lyricStyle.currentStyle == LyricStyle.fluidCloud 
-                    ? Colors.cyan[300] 
-                    : Colors.purple[300],
-                trailing: _buildSwitchIndicator(lyricStyle.currentStyle == LyricStyle.fluidCloud),
+                iconColor: lyricStyle.currentStyle == LyricStyle.immersive
+                    ? Colors.amber[300]
+                    : Colors.cyan[300],
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    lyricStyle.currentStyle == LyricStyle.immersive ? '沉浸' : '流体',
+                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                  ),
+                ),
                 onTap: () {
-                  final newStyle = lyricStyle.currentStyle == LyricStyle.fluidCloud 
-                      ? LyricStyle.defaultStyle 
-                      : LyricStyle.fluidCloud;
-                  lyricStyle.setStyle(newStyle);
+                  // 循环切换样式：仅在流体云和沉浸模式间切换 (桌面端隐藏经典模式)
+                  LyricStyle nextStyle = lyricStyle.currentStyle == LyricStyle.immersive 
+                      ? LyricStyle.fluidCloud 
+                      : LyricStyle.immersive;
+                  lyricStyle.setStyle(nextStyle);
                   _overlayEntry?.markNeedsBuild();
                 },
               ),
@@ -1393,6 +1460,42 @@ class _TopBarButton extends StatelessWidget {
         ),
         onPressed: onPressed,
       ),
+    );
+  }
+}
+
+/// 布局快捷切换按钮
+class _LayoutToggleButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: LyricStyleService(),
+      builder: (context, _) {
+        final currentStyle = LyricStyleService().currentStyle;
+        return Tooltip(
+          message: '快速切换播放器样式',
+          child: IconButton(
+            icon: Icon(
+              currentStyle == LyricStyle.immersive 
+                  ? Icons.fullscreen_exit_rounded 
+                  : Icons.fullscreen_rounded,
+              size: 24,
+            ),
+            color: Colors.white.withOpacity(0.8),
+            onPressed: () {
+              LyricStyle nextStyle;
+              if (currentStyle == LyricStyle.defaultStyle) {
+                nextStyle = LyricStyle.fluidCloud;
+              } else if (currentStyle == LyricStyle.fluidCloud) {
+                nextStyle = LyricStyle.immersive;
+              } else {
+                nextStyle = LyricStyle.defaultStyle;
+              }
+              LyricStyleService().setStyle(nextStyle);
+            },
+          ),
+        );
+      },
     );
   }
 }

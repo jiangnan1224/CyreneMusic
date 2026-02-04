@@ -1,7 +1,11 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
+#include <timeapi.h>
 #include <shobjidl.h>
+
+#pragma comment(lib, "winmm.lib")
+
 #include <propkey.h>
 #include <propvarutil.h>
 #include <cstdlib>
@@ -14,6 +18,11 @@ auto bdw = bitsdojo_window_configure(BDW_CUSTOM_FRAME | BDW_HIDE_ON_STARTUP);
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  // 提升系统计时器精度到 1ms，确保高刷新率下的 VSync 同步精准
+  timeBeginPeriod(1);
+  
+  // 设置进程为高优先级，确保渲染线程获得稳定调度
+  SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
   // Ensure only one instance is running
   const wchar_t kUniqueMutexName[] = L"Local\\CyreneMusicInstanceMutex";
   HANDLE mutex = CreateMutex(nullptr, TRUE, kUniqueMutexName);
@@ -56,11 +65,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   flutter::DartProject project(L"data");
 
-  // 启用 Impeller 渲染引擎以支持高刷新率
-  // 通过环境变量设置引擎开关，Impeller 使用 Direct3D 后端
-  // 可以更好地匹配显示器刷新率（如 120Hz、144Hz 等）
-  _putenv_s("FLUTTER_ENGINE_SWITCHES", "1");
-  _putenv_s("FLUTTER_ENGINE_SWITCH_1", "enable-impeller=true");
+  // 获取命令行参数
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();

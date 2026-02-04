@@ -27,7 +27,7 @@ class PlayerDialogs {
   }
 
   /// 显示添加到歌单对话框
-  static void showAddToPlaylist(BuildContext context, Track track) {
+  static Future<void> showAddToPlaylist(BuildContext context, Track track) {
     final playlistService = PlaylistService();
     
     // 确保已加载歌单列表
@@ -35,7 +35,7 @@ class PlayerDialogs {
       playlistService.loadPlaylists();
     }
 
-    showModalBottomSheet(
+    return showModalBottomSheet(
       context: context,
       builder: (context) => AnimatedBuilder(
         animation: playlistService,

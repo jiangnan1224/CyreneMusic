@@ -7,9 +7,7 @@ class DeveloperModeService extends ChangeNotifier {
   static final DeveloperModeService _instance = DeveloperModeService._internal();
   factory DeveloperModeService() => _instance;
   
-  DeveloperModeService._internal() {
-    _initFuture = _loadDeveloperMode();
-  }
+  DeveloperModeService._internal();
 
   bool _isDeveloperMode = false;
   bool get isDeveloperMode => _isDeveloperMode;
@@ -17,16 +15,25 @@ class DeveloperModeService extends ChangeNotifier {
   bool _isSearchResultMergeEnabled = true;
   bool get isSearchResultMergeEnabled => _isSearchResultMergeEnabled;
 
+  bool _showPerformanceOverlay = false;
+  bool get showPerformanceOverlay => _showPerformanceOverlay;
+
   int _settingsClickCount = 0;
   DateTime? _lastClickTime;
 
   /// 初始化完成的 Future，用于等待加载完成
-  late final Future<void> _initFuture;
+  Future<void>? _initFuture;
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
   
-  /// 等待初始化完成
-  Future<void> ensureInitialized() => _initFuture;
+  /// 初始化服务（必须在 WidgetsFlutterBinding.ensureInitialized() 之后调用）
+  Future<void> initialize() {
+    _initFuture ??= _loadDeveloperMode();
+    return _initFuture!;
+  }
+  
+  /// 等待初始化完成（如果尚未初始化则先初始化）
+  Future<void> ensureInitialized() => initialize();
 
   /// 记录日志
   final List<String> _logs = [];
@@ -102,6 +109,14 @@ class DeveloperModeService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 切换性能叠加层开关
+  Future<void> togglePerformanceOverlay(bool value) async {
+    _showPerformanceOverlay = value;
+    await _saveDeveloperMode();
+    addLog(value ? '📈 已启用性能叠加层' : '📈 已禁用性能叠加层');
+    notifyListeners();
+  }
+
   /// 添加日志
   void addLog(String message) {
     final timestamp = DateTime.now().toString().substring(11, 19);
@@ -129,6 +144,7 @@ class DeveloperModeService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _isDeveloperMode = prefs.getBool('developer_mode') ?? false;
       _isSearchResultMergeEnabled = prefs.getBool('search_result_merge_enabled') ?? true;
+      _showPerformanceOverlay = prefs.getBool('show_performance_overlay') ?? false;
       _isInitialized = true;
       if (_isDeveloperMode) {
         print('🔧 [DeveloperMode] 从本地加载: 已启用');
@@ -149,6 +165,7 @@ class DeveloperModeService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('developer_mode', _isDeveloperMode);
       await prefs.setBool('search_result_merge_enabled', _isSearchResultMergeEnabled);
+      await prefs.setBool('show_performance_overlay', _showPerformanceOverlay);
       print('💾 [DeveloperMode] 状态已保存: 开发者模式=$_isDeveloperMode, 搜索合并=$_isSearchResultMergeEnabled');
     } catch (e) {
       print('❌ [DeveloperMode] 保存失败: $e');

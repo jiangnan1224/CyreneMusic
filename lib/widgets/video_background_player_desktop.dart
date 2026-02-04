@@ -119,27 +119,31 @@ class _VideoBackgroundPlayerDesktopState extends State<VideoBackgroundPlayerDesk
       );
     }
 
-    Widget videoWidget = Video(
-      controller: _controller!,
-      fit: BoxFit.cover,
-      controls: null,
+    Widget videoWidget = RepaintBoundary(
+      child: Video(
+        controller: _controller!,
+        fit: BoxFit.cover,
+        controls: null,
+      ),
     );
 
     if (widget.blurAmount > 0 || widget.opacity < 1.0) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          videoWidget,
-          BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: widget.blurAmount,
-              sigmaY: widget.blurAmount,
+      return RepaintBoundary(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            videoWidget,
+            BackdropFilter(
+              filter: ImageFilter.blur(
+                sigmaX: widget.blurAmount,
+                sigmaY: widget.blurAmount,
+              ),
+              child: Container(
+                color: Colors.black.withOpacity(1 - widget.opacity),
+              ),
             ),
-            child: Container(
-              color: Colors.black.withOpacity(1 - widget.opacity),
-            ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 

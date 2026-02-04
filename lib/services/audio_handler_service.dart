@@ -4,6 +4,11 @@ import 'package:audio_service/audio_service.dart';
 import 'player_service.dart';
 import 'android_floating_lyric_service.dart';
 import 'android_media_notification_service.dart';
+import 'package:home_widget/home_widget.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
+import 'lab_functions_service.dart';
+
 
 /// Android 媒体通知处理器
 /// 使用 audio_service 包实现 Android 系统通知栏的媒体控件
@@ -16,6 +21,9 @@ class CyreneAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   DateTime? _lastLogTime;  // 上次记录日志的时间
   Duration? _lastUpdatedPosition;  // 上次更新的位置（用于减少不必要的更新）
   PlayerState? _lastUpdatedState;  // 上次更新的播放状态（用于减少不必要的更新）
+  String? _lastWidgetArtUri;      // 上次小部件使用的封面 URI
+  String? _lastWidgetArtPath;     // 上次小部件使用的封面本地路径
+  String? _lastWidgetSongKey;     // 上次小部件显示的歌曲标识 (Title + Artist)
   
   // 构造函数
   CyreneAudioHandler() {
@@ -32,7 +40,8 @@ class CyreneAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       _startLyricUpdateTimer();
 
       // 启动自定义 Android 媒体通知服务（复用 audio_service 的 MediaSession）
-      AndroidMediaNotificationService().start();
+      // 🔧 修复：禁用自定义通知服务，避免与 audio_service/media_kit 的系统通知冲突导致出现两个播放器控件
+      // AndroidMediaNotificationService().start();
     }
     
     // 启动进度条更新定时器
@@ -166,9 +175,11 @@ class CyreneAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     
     // 🔧 关键修复：在播放开始时（loading 或 playing）立即更新，不等待防抖
     // 这样可以确保初次播放时状态和进度立即显示
+    // 🔧 关键修复：在播放开始或暂停时都立即更新，不等待防抖
+    // 这样可以确保状态切换（播放/暂停）立即响应
     final shouldUpdateImmediately = currentState == PlayerState.loading || 
-        currentState == PlayerState.playing ||
-        (currentState == PlayerState.playing && !previousState.playing);
+        (currentState == PlayerState.playing && !previousState.playing) ||
+        (currentState == PlayerState.paused && previousState.playing);
     
     if (shouldUpdateImmediately) {
       // 立即更新，不等待防抖
@@ -213,6 +224,12 @@ class CyreneAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       }
     });
   }
+
+  /// 外部手动触发更新（例如在设置中开启小部件后立即同步）
+  void refreshWidget() {
+    print('🔄 [AudioHandler] 手动触发小部件更新...');
+    _performUpdate();
+  }
   
   /// 实际执行更新操作
   void _performUpdate() {
@@ -227,6 +244,117 @@ class CyreneAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     if (song != null || track != null) {
       _updateMediaItem(song, track);
     }
+    
+    // 更新桌面小部件
+    _updateWidget(player.state, song ?? track);
+  }
+
+  /// 更新桌面小部件数据
+  Future<void> _updateWidget(PlayerState state, dynamic songOrTrack) async {
+    if (!Platform.isAndroid) return;
+    
+    // 检查小部件是否开启（仅赞助用户可用且由用户在实验室设置中手动开启）
+    if (!LabFunctionsService().enableAndroidWidget) {
+      // 如果未开启，将小部件内容替换为提示文字
+      try {
+        await Future.wait([
+          HomeWidget.saveWidgetData<String>('title', '小部件功能权限未开启？\n请前往设置-实验室开启'),
+          HomeWidget.saveWidgetData<String>('artist', ''),
+          HomeWidget.saveWidgetData<bool>('isPlaying', false),
+          HomeWidget.saveWidgetData<String>('albumArtPath', ''),
+          HomeWidget.saveWidgetData<bool>('isEnabled', false),
+        ]);
+        await _triggerWidgetUpdates();
+      } catch (e) {
+        print('⚠️ [AudioHandler] 更新小部件禁用状态提示失败: $e');
+      }
+      return;
+    }
+    
+    try {
+      final title = songOrTrack?.name ?? songOrTrack?.title ?? 'Not Playing';
+      final artist = songOrTrack?.arName ?? songOrTrack?.artist ?? 'Cyrene Music';
+      final isPlaying = state == PlayerState.playing;
+
+      // 1. 并行保存基础信息（加速响应）
+      await Future.wait([
+        HomeWidget.saveWidgetData<String>('title', title),
+        HomeWidget.saveWidgetData<String>('artist', artist),
+        HomeWidget.saveWidgetData<bool>('isPlaying', isPlaying),
+        HomeWidget.saveWidgetData<bool>('isEnabled', true),
+      ]);
+
+      // --- 专辑封面同步逻辑 (优化：识别切歌并强制刷新) ---
+      String? albumArtPath = _lastWidgetArtPath;
+      final artUri = songOrTrack?.pic ?? songOrTrack?.picUrl ?? '';
+      final currentSongKey = '$title-$artist';
+      final songChanged = currentSongKey != _lastWidgetSongKey;
+
+      // 如果歌曲变了，或者封面 URI 变了，我们需要强制更新封面
+      if (artUri.isNotEmpty && (songChanged || artUri != _lastWidgetArtUri)) {
+        if (artUri.startsWith('http')) {
+          // 网络图片：下载并保存到固定文件（覆盖式）
+          try {
+            print('🌐 [AudioHandler] 歌曲或封面变化，更新小部件封面: $artUri');
+            final response = await http.get(Uri.parse(artUri)).timeout(const Duration(seconds: 5));
+            if (response.statusCode == 200) {
+              final tempDir = await getTemporaryDirectory();
+              final file = File('${tempDir.path}/widget_art.png');
+              await file.writeAsBytes(response.bodyBytes);
+              albumArtPath = file.path;
+              _lastWidgetArtUri = artUri;
+              _lastWidgetArtPath = albumArtPath;
+              _lastWidgetSongKey = currentSongKey;
+              // 更新版本号以强制原生端重新解码即便路径相同
+              await HomeWidget.saveWidgetData<int>('art_version', DateTime.now().millisecondsSinceEpoch);
+            }
+          } catch (e) {
+            print('⚠️ [AudioHandler] 下载小部件封面失败: $e');
+          }
+        } else if (artUri.startsWith('/') || artUri.startsWith('file://')) {
+          // 本地图片：直接使用路径
+          albumArtPath = artUri.replaceFirst('file://', '');
+          _lastWidgetArtUri = artUri;
+          _lastWidgetArtPath = albumArtPath;
+          _lastWidgetSongKey = currentSongKey;
+          // 直接更新版本号
+          await HomeWidget.saveWidgetData<int>('art_version', DateTime.now().millisecondsSinceEpoch);
+        }
+      } else if (artUri.isEmpty) {
+        // 无封面情况
+        if (songChanged) {
+          albumArtPath = null;
+          _lastWidgetArtUri = null;
+          _lastWidgetArtPath = null;
+          _lastWidgetSongKey = currentSongKey;
+        }
+      }
+      
+      await HomeWidget.saveWidgetData<String>('albumArtPath', albumArtPath ?? '');
+      
+      print('📱 [AudioHandler] 更新小部件数据: Title=$title, Artist=$artist, Playing=$isPlaying, ArtPath=$albumArtPath');
+
+      // 触发小部件更新
+      _triggerWidgetUpdates();
+    } catch (e) {
+      print('⚠️ [AudioHandler] 更新桌面小部件失败: $e');
+    }
+  }
+
+  /// 触发所有小部件更新
+  Future<void> _triggerWidgetUpdates() async {
+    // 触发小部件更新 (MusicWidget)
+    await HomeWidget.updateWidget(
+      name: 'MusicWidget',
+      qualifiedAndroidName: 'com.cyrene.music.MusicWidget',
+    );
+    
+    // 触发小部件更新 (MusicWidgetSmall)
+    await HomeWidget.updateWidget(
+      name: 'MusicWidgetSmall',
+      qualifiedAndroidName: 'com.cyrene.music.MusicWidgetSmall',
+    );
+    print('✅ [AudioHandler] 小部件更新请求已发送 (Large & Small)');
   }
 
   /// 更新媒体信息
@@ -364,10 +492,8 @@ class CyreneAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     print('🎮 [AudioHandler] 蓝牙/系统媒体控件: 播放');
     final player = PlayerService();
     await player.resume();
-    // 🔧 等待状态更新完成（audioplayers 的状态更新是异步的）
-    await Future.delayed(const Duration(milliseconds: 50));
-    // 🔧 立即更新状态，不等待防抖延迟，确保按钮状态同步
-    _forceUpdatePlaybackState();
+    // 🔧 移除手动强制更新，依赖 _onPlayerStateChanged 监听器自动更新
+    // 之前的手动更新会导致竞态条件（状态还没变就强制更新了旧状态）
   }
 
   @override
@@ -375,10 +501,7 @@ class CyreneAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     print('🎮 [AudioHandler] 蓝牙/系统媒体控件: 暂停');
     final player = PlayerService();
     await player.pause();
-    // 🔧 等待状态更新完成（audioplayers 的状态更新是异步的）
-    await Future.delayed(const Duration(milliseconds: 50));
-    // 🔧 立即更新状态，不等待防抖延迟，确保按钮状态同步
-    _forceUpdatePlaybackState();
+    // 🔧 移除手动强制更新，依赖 _onPlayerStateChanged 监听器自动更新
   }
 
   @override
