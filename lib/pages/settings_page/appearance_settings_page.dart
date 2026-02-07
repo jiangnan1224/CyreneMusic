@@ -209,7 +209,7 @@ class _AppearanceSettingsContentState extends State<AppearanceSettingsContent> {
               ),
               if (Platform.isWindows)
                 MD3SettingsTile(
-                  leading: const Icon(Icons.transition_effect),
+                  leading: const Icon(Icons.blur_on),
                   title: '窗口材质',
                   subtitle: _windowEffectLabel(ThemeManager().windowEffect),
                   trailing: const Icon(Icons.chevron_right),
@@ -1374,6 +1374,80 @@ class _AppearanceSettingsContentState extends State<AppearanceSettingsContent> {
         ),
       );
     }
+  }
+
+  void _showWindowEffectDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('选择窗口材质'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<WindowEffect>(
+              title: const Text('默认'),
+              subtitle: const Text('不应用特殊的窗口效果'),
+              value: WindowEffect.disabled,
+              groupValue: ThemeManager().windowEffect,
+              onChanged: (value) async {
+                if (value != null) {
+                  await ThemeManager().setWindowEffect(value);
+                  Navigator.pop(context);
+                  setState(() {});
+                }
+              },
+            ),
+            RadioListTile<WindowEffect>(
+              title: const Text('云母 (Mica)'),
+              subtitle: Text(
+                ThemeManager().isMicaSupported ? 'Windows 11 原生材质效果' : '当前系统不支持（仅限 Win11）',
+              ),
+              value: WindowEffect.mica,
+              groupValue: ThemeManager().windowEffect,
+              onChanged: ThemeManager().isMicaSupported ? (value) async {
+                if (value != null) {
+                  await ThemeManager().setWindowEffect(value);
+                  Navigator.pop(context);
+                  setState(() {});
+                }
+              } : null,
+            ),
+            RadioListTile<WindowEffect>(
+              title: const Text('亚克力 (Acrylic)'),
+              subtitle: const Text('经典的毛玻璃半透明效果'),
+              value: WindowEffect.acrylic,
+              groupValue: ThemeManager().windowEffect,
+              onChanged: (value) async {
+                if (value != null) {
+                  await ThemeManager().setWindowEffect(value);
+                  Navigator.pop(context);
+                  setState(() {});
+                }
+              },
+            ),
+            RadioListTile<WindowEffect>(
+              title: const Text('透明'),
+              subtitle: const Text('完全透明的窗口背景'),
+              value: WindowEffect.transparent,
+              groupValue: ThemeManager().windowEffect,
+              onChanged: (value) async {
+                if (value != null) {
+                  await ThemeManager().setWindowEffect(value);
+                  Navigator.pop(context);
+                  setState(() {});
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 显示歌词字体选择对话框 (Fluent UI / Material)
