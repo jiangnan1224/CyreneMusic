@@ -61,7 +61,9 @@ class ThemeManager extends ChangeNotifier {
   Color _seedColor = Colors.deepPurple;
   bool _followSystemColor = true; // 默认跟随系统主题色
   Color? _systemColor; // 系统主题色缓存
-  ThemeFramework _themeFramework = ThemeFramework.material; // 默认使用 Material 3
+  ThemeFramework _themeFramework = (Platform.isWindows || Platform.isMacOS || Platform.isLinux) 
+      ? ThemeFramework.fluent 
+      : ThemeFramework.material; // 桌面端默认使用 Fluent UI，移动端默认使用 Material 3
   MobileThemeFramework _mobileThemeFramework = MobileThemeFramework.cupertino; // 移动端默认使用 iOS 风格
   WindowEffect _windowEffect = WindowEffect.disabled; // 窗口材质效果
   bool _isApplyingWindowEffect = false; // 防止并发应用导致插件内部状态错误
