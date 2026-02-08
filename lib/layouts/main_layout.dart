@@ -815,6 +815,7 @@ class _MainLayoutState extends State<MainLayout>
         final isLocalMode = PersistentStorageService().enableLocalMode;
         print('🖱️ [MainLayout] NavigationBar tab selected: $tabIndex (LocalMode: $isLocalMode)');
         
+        int targetIndex = tabIndex;
         if (!isLocalMode) {
           final int moreTab = destinations.length - 1;
           if (tabIndex == moreTab) {
@@ -822,13 +823,24 @@ class _MainLayoutState extends State<MainLayout>
             await _openMoreBottomSheet(context);
             return;
           }
+
+          // 修复索引映射：从标签索引映射回真实的页面索引
+          if (tabIndex == 0) {
+            targetIndex = 0;
+          } else if (tabIndex == 1) {
+            targetIndex = 1;
+          } else if (tabIndex == 2) {
+            targetIndex = myIndex;
+          } else if (isLandscape && tabIndex == 3) {
+            targetIndex = supportIndex;
+          }
         }
 
         setState(() {
-          _selectedIndex = tabIndex;
+          _selectedIndex = targetIndex;
           print('🔄 [MainLayout] _selectedIndex updated to: $_selectedIndex');
         });
-        PageVisibilityNotifier().setCurrentPage(tabIndex);
+        PageVisibilityNotifier().setCurrentPage(targetIndex);
       },
       destinations: destinations,
     );
