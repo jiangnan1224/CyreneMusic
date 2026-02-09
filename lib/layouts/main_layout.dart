@@ -638,18 +638,40 @@ class _MainLayoutState extends State<MainLayout>
                   final isLocalMode = PersistentStorageService().enableLocalMode;
                   if (isSelected) return;
                   
-                  if (!isLocalMode) {
-                    final int moreTab = tabItems.length - 1;
-                    if (index == moreTab) {
-                      await _openCupertinoMoreSheet(context);
-                      return;
-                    }
+                  if (isLocalMode) {
+                    // 本地模式：0 -> 本地, 1 -> 退出本地(其实是 MobileSetupPage)
+                    setState(() {
+                      _selectedIndex = index;
+                    });
+                    PageVisibilityNotifier().setCurrentPage(index);
+                    return;
+                  }
+
+                  // 非本地模式：映射 Tab 索引到页面索引
+                  final int moreTab = tabItems.length - 1;
+                  if (index == moreTab) {
+                    await _openCupertinoMoreSheet(context);
+                    return;
+                  }
+
+                  int targetPageIndex;
+                  if (index == 0) {
+                    targetPageIndex = 0; // 首页
+                  } else if (index == 1) {
+                    targetPageIndex = 1; // 发现
+                  } else if (index == 2) {
+                    targetPageIndex = myIndex; // 我的
+                  } else if (isLandscape && index == 3) {
+                    targetPageIndex = supportIndex; // 支持 (横屏下才有)
+                  } else {
+                    // 理论上不会走到这里，因为 moreTab 已经提前拦截了
+                    return;
                   }
                   
                   setState(() {
-                    _selectedIndex = index;
+                    _selectedIndex = targetPageIndex;
                   });
-                  PageVisibilityNotifier().setCurrentPage(index);
+                  PageVisibilityNotifier().setCurrentPage(targetPageIndex);
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),

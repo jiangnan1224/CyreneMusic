@@ -390,6 +390,13 @@ class MusicService extends ChangeNotifier {
           );
           break;
 
+        case MusicSource.spotify:
+          // Spotify 歌曲详情处理
+          return await _fetchSongDetailFromSpotify(
+            songId: songId,
+            quality: effectiveQuality,
+          );
+
         case MusicSource.local:
           // 本地音乐已在方法开头处理，不会到达这里
           // 保留 case 以满足 switch 完整性
@@ -1057,6 +1064,57 @@ class MusicService extends ChangeNotifier {
       if (e is UnsupportedError) rethrow;
       print('❌ [MusicService] TuneHub v3 音源异常: $e');
       DeveloperModeService().addLog('❌ [MusicService] 异常: $e');
+      return null;
+    }
+  }
+
+  /// 🎵 Spotify 音源：获取歌曲详情 (通过流媒体服务)
+  Future<SongDetail?> _fetchSongDetailFromSpotify({
+    required dynamic songId,
+    required AudioQuality quality,
+  }) async {
+    final baseUrl = UrlService().baseUrl;
+    // 使用流端点获取可播放 URL
+    final url = '$baseUrl/spotify/stream/$songId';
+
+    DeveloperModeService().addLog('🌐 [Network] GET $url');
+
+    try {
+      final response = await http.get(Uri.parse(url)).timeout(
+        const Duration(seconds: 30), // 流获取可能需要较长时间
+        onTimeout: () {
+          DeveloperModeService().addLog('⏱️ [Network] 请求超时 (30s)');
+          throw Exception('请求超时');
+        },
+      );
+
+      DeveloperModeService().addLog('📥 [Network] 状态码: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        if (data['status'] == 200 && data['data'] != null) {
+          final streamData = data['data'];
+          final metadata = streamData['metadata'];
+
+          return SongDetail(
+            id: songId,
+            name: metadata['name'] ?? '',
+            pic: metadata['coverArt'] ?? '',
+            arName: metadata['artists'] ?? '',
+            alName: metadata['album'] ?? '',
+            level: streamData['bitrate'] ?? 'High',
+            size: '0',
+            url: streamData['url'] ?? streamData['proxyUrl'] ?? '',
+            lyric: streamData['lyric'] ?? '',
+            tlyric: '', // Spotify 通常无翻译
+            source: MusicSource.spotify,
+          );
+        }
+      }
+      return null;
+    } catch (e) {
+      print('❌ [MusicService] Spotify fetch failed: $e');
+      DeveloperModeService().addLog('❌ [MusicService] Spotify异常: $e');
       return null;
     }
   }
