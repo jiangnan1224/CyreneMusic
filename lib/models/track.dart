@@ -5,6 +5,7 @@ enum MusicSource {
   kugou,    // 酷狗音乐
   kuwo,     // 酷我音乐
   apple,    // Apple Music
+  spotify,  // Spotify
   local,    // 本地文件
 }
 
@@ -63,6 +64,8 @@ class Track {
         return '酷我音乐';
       case MusicSource.apple:
         return 'Apple Music';
+      case MusicSource.spotify:
+        return 'Spotify';
       case MusicSource.local:
         return '本地';
     }
@@ -81,6 +84,8 @@ class Track {
         return '🎸';
       case MusicSource.apple:
         return '🍎';
+      case MusicSource.spotify:
+        return '🟢';
       case MusicSource.local:
         return '📁';
     }

@@ -110,8 +110,10 @@ class MergedTrack {
         return 3;
       case MusicSource.apple:
         return 4; // Apple Music 优先级最低
-      case MusicSource.local:
+      case MusicSource.spotify:
         return 5;
+      case MusicSource.local:
+        return 6;
     }
   }
 }

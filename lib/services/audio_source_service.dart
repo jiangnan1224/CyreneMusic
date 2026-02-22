@@ -70,7 +70,7 @@ class AudioSourceService extends ChangeNotifier {
 
   /// 各音源类型默认支持的搜索平台
   static const Map<AudioSourceType, List<String>> defaultSupportedPlatforms = {
-    AudioSourceType.omniparse: ['netease', 'qq', 'kugou', 'kuwo', 'apple'],
+    AudioSourceType.omniparse: ['netease', 'qq', 'kugou', 'kuwo', 'apple', 'spotify'],
     AudioSourceType.tunehub: ['netease', 'qq', 'kuwo'],
     AudioSourceType.lxmusic: [], // 动态从脚本获取
   };
