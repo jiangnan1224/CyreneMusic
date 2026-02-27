@@ -45,8 +45,8 @@ class _MobileAppGateState extends State<MobileAppGate> {
     final isTermsAccepted = PersistentStorageService().getBool('terms_accepted') ?? false;
     final isLocalMode = PersistentStorageService().enableLocalMode;
 
-    // 音源配置、登录以及协议确认都完成后，显示主布局；或者开启了本地模式且已确认协议
-    if ((isConfigured && isLoggedIn && isTermsAccepted) || (isLocalMode && isTermsAccepted)) {
+    // 只要用户已确认协议（不论是完成配置、跳过配置还是本地模式），即可进入主布局
+    if (isTermsAccepted) {
       return const MainLayout();
     }
 
