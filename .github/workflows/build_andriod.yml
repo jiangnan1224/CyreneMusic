@@ -1,0 +1,55 @@
+name: Android Build Only
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_android:
+        description: '构建 Android'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Restore keystore and key properties
+        run: |
+          mkdir -p android/keys
+          echo "${{ secrets.CYRENE_KEYSTORE_BASE64 }}" | base64 --decode > android/keys/cyrene-release.jks
+          cat <<'EOF' > android/key.properties
+          storeFile=keys/cyrene-release.jks
+          storePassword=${{ secrets.CYRENE_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.CYRENE_KEY_ALIAS }}
+          keyPassword=${{ secrets.CYRENE_KEY_PASSWORD }}
+          EOF
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: |
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+
