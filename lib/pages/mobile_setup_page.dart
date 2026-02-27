@@ -64,11 +64,11 @@ class _MobileSetupPageState extends State<MobileSetupPage> {
       setState(() {
         // 如果音源已配置且在配置步骤，自动进入下一步
         if (_currentStep == 2 && AudioSourceService().isConfigured) {
-          _currentStep = 1; // 返回欢迎页（音源入口）
+          _currentStep = 3; // 跳到登录步骤
         }
-        // 如果登录已完成且在登录步骤，自动进入协议页
+        // 如果登录已完成且在登录步骤，自动进入主界面
         if (_currentStep == 3 && AuthService().isLoggedIn) {
-          _currentStep = 4; 
+          Navigator.pushReplacementNamed(context, '/home');
         }
       });
     }
